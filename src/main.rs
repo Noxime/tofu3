@@ -58,15 +58,11 @@ fn main() {
                 let config = mongo::get_config(db, msg.guild_id().unwrap());
                 config.user.prefix
             }))
-        .command("ping", |c| c.cmd(ping))
         .command("stats", |c| c.cmd(modules::stats::stats))
+        .command("rank", |c| c.cmd(modules::ranks::rank))
     );
 
     if let Err(why) = client.start() {
         eprintln!("Could not start serenity: {:?}", why);
     }
 }
-
-command!(ping(_ctx, msg) {
-    let _ = msg.channel_id.say("Pong!");
-});

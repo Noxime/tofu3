@@ -4,7 +4,9 @@ use mongodb::db::{Database, ThreadedDatabase};
 use mongodb::coll::options::FindOneAndUpdateOptions;
 use bson;
 use bson::Bson;
-use serenity::model::id::GuildId;
+use serenity::model::id::{GuildId, UserId};
+
+use std::collections::HashMap;
 
 // This stores our mongo database in our framework
 pub struct Mongo;
@@ -23,7 +25,6 @@ pub struct GuildConfig {
 pub struct Changeable {
     pub prefix: Option<String>
 }
-
 impl GuildConfig {
     fn new(id: i64) -> Self {
         Self {
@@ -32,6 +33,26 @@ impl GuildConfig {
                 prefix: None
             }
         }
+    }
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+pub struct UserConfig {
+    #[serde(rename = "_id")]
+    pub user_id: i64,
+    pub scores: HashMap<String, i64> // guild_id, score
+}
+impl UserConfig {
+    fn new(id: i64) -> Self {
+        Self {
+            user_id: id,
+            scores: HashMap::new()
+        }
+    }
+
+    pub fn get_score(self, id: GuildId) -> i64 {
+        debug!("accessing {}", id.0 as i64);
+        *self.scores.get(&(id.0 as i64).to_string()).unwrap_or(&0i64)
     }
 }
 
@@ -46,7 +67,7 @@ pub fn connect() -> Database {
 
 // fetch a config from mongo
 pub fn get_config(db: &Database, id: GuildId) -> GuildConfig {
-    let collection = db.collection("guild_configs");
+    let collection = db.collection("configs");
     match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
         Ok(option) => {
             match option {
@@ -78,7 +99,7 @@ pub fn set_config(db: &Database, config: &GuildConfig) {
         upsert: Some(true),
         write_concern: None
     };
-    let collection = db.collection("guild_configs");
+    let collection = db.collection("configs");
     if let Bson::Document(document) = bson::to_bson(&config).unwrap() {
         match collection.find_one_and_replace(
             doc!{ "_id" => config.guild_id }, 
@@ -87,6 +108,56 @@ pub fn set_config(db: &Database, config: &GuildConfig) {
             Ok(_) => {},
             Err(why) => {
                 error!("Failed to set a guild config: {:#?}", why);
+            }
+        }
+    }
+}
+
+pub fn get_user(db: &Database, id: UserId) -> UserConfig {
+    let collection = db.collection("users");
+    match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
+        Ok(option) => {
+            match option {
+                Some(value) => bson::from_bson(Bson::Document(value))
+                    .expect(format!("Failed to deserialize user config {}", 
+                        id.0 as i64).as_str()),
+                None => {
+                    let user = UserConfig::new(id.0 as i64);
+                    set_user(db, &user);
+                    user
+                }
+            }
+        },
+        Err(why) => {
+            error!("Failed to access MongoDB: {:#?}", why);
+            let user = UserConfig::new(id.0 as i64);
+            set_user(db, &user);
+            user
+        }
+    }
+}
+
+pub fn set_user(db: &Database, user: &UserConfig) {
+    // turn on upsert
+    let options = FindOneAndUpdateOptions {
+        return_document: None,
+        max_time_ms: None,
+        projection: None,
+        sort: None,
+        upsert: Some(true),
+        write_concern: None
+    };
+    let collection = db.collection("users");
+    if let Bson::Document(document) = bson::to_bson(&user).unwrap() {
+        match collection.find_one_and_replace(
+            doc!{ "_id" => user.user_id }, 
+            document,
+            Some(options)) {
+            Ok(_) => {},
+            Err(why) => {
+                error!("Failed to set a user config for {}: {:#?}", 
+                    user.user_id, 
+                    why);
             }
         }
     }
