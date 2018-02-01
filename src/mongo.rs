@@ -1,7 +1,7 @@
 use typemap::Key;
 use mongodb::{Client, ThreadedClient};
 use mongodb::db::{Database, ThreadedDatabase};
-use mongodb::coll::options::FindOneAndUpdateOptions;
+use mongodb::coll::options::{FindOneAndUpdateOptions, FindOptions};
 use bson;
 use bson::Bson;
 use serenity::model::id::{GuildId, UserId};
@@ -50,9 +50,12 @@ impl UserConfig {
         }
     }
 
-    pub fn get_score(self, id: GuildId) -> i64 {
-        debug!("accessing {}", id.0 as i64);
+    pub fn get_score(&self, id: GuildId) -> i64 {
         *self.scores.get(&(id.0 as i64).to_string()).unwrap_or(&0i64)
+    }
+
+    pub fn set_score(&mut self, id: GuildId, score: i64) {
+        self.scores.insert((id.0 as i64).to_string(), score);
     }
 }
 
@@ -161,4 +164,35 @@ pub fn set_user(db: &Database, user: &UserConfig) {
             }
         }
     }
+}
+
+// find the users with top score in certain guild
+pub fn get_top_users(db: &Database, id: GuildId, limit: i64) -> Vec<UserConfig> {
+    let mut results: Vec<UserConfig> = vec![];
+    // set a sorting mode based on the guild id
+    let mut options = FindOptions::new();
+    options.sort = Some(doc! {
+        format!("scores.{}", id): -1 // -1 means biggest first
+    });
+    options.limit = Some(limit);
+
+    // we seach in users collection
+    let collection = db.collection("users");
+    debug!("scores.{}", id);
+    // our results
+    let cursor = collection.find(Some(doc! {
+        format!("scores.{}", id): doc! { "$exists": true }
+    }), Some(options)).unwrap();
+
+    // deserialize all our results
+    for item in cursor {
+        let doc = item.unwrap();
+
+        let parsed = bson::from_bson(Bson::Document(doc)).expect(
+            &format!("Failed to deserialize user"));
+
+        results.push(parsed);
+    }
+
+    return results;
 }

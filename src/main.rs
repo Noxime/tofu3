@@ -11,17 +11,54 @@ extern crate kankyo;
 extern crate pretty_env_logger;
 extern crate mongodb;
 extern crate typemap;
+extern crate time;
 
-use serenity::prelude::{Client as DiscordClient, EventHandler};
-use serenity::framework::StandardFramework;
+use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
+use serenity::framework::standard::{
+    StandardFramework, HelpBehaviour, help_commands
+};
+use serenity::utils::Colour;
+use serenity::model::channel::Message;
+use serenity::model::id::{UserId};
+use typemap::Key;
+
+use std::collections::HashMap;
 
 mod mongo;
 mod modules;
 
+// this makes sure we don't give too much score too often. The hashmap contains
+// a user id and then the last unix timestamp they got some score. So we wait 2
+// minutes before we can give more again
+struct RankLock;
+impl Key for RankLock {
+    type Value = HashMap<UserId, u64>;
+}
+
 struct DiscordHandler;
 
 impl EventHandler for DiscordHandler {
-
+    fn message(&self, ctx: Context, msg: Message) {
+        // for our ranks, we need to add the score from this message to the db
+        { // first check if even should give user score (aka 2min passed)
+            let mut data = ctx.data.lock(); // we want to release this asap
+            let lock = data.get_mut::<RankLock>().unwrap();
+            let last = lock.entry(msg.author.id).or_insert(0);
+            let now = time::now().to_timespec().sec;
+            // check 2 minutes passed
+            if *last + 120 < now as u64 {
+                *last = now as u64;
+            } else {
+                return;
+            }
+        }
+        let data = ctx.data.lock(); // we want to release this asap
+        let db = data.get::<mongo::Mongo>().unwrap(); // mongo access
+        let mut user = mongo::get_user(db, msg.author.id);
+        let score = user.get_score(msg.guild_id().unwrap()) + 5; //incr 5 legacy
+        user.set_score(msg.guild_id().unwrap(), score);
+        mongo::set_user(db, &user);
+    }
 }
 
 fn main() {
@@ -45,6 +82,7 @@ fn main() {
     {
         let mut data = client.data.lock();
         data.insert::<mongo::Mongo>(mongo::connect());
+        data.insert::<RankLock>(HashMap::new());
     }
 
     // configure our discord framework
@@ -58,8 +96,38 @@ fn main() {
                 let config = mongo::get_config(db, msg.guild_id().unwrap());
                 config.user.prefix
             }))
-        .command("stats", |c| c.cmd(modules::stats::stats))
-        .command("rank", |c| c.cmd(modules::ranks::rank))
+        // a nice help command for our users
+        .customised_help(help_commands::with_embeds, |c| c
+            .individual_command_tip("Hello! Thanks for using TofuBot. If you \
+            want to learn more about a specific command, just add the command \
+            name after `help`")
+            .command_not_found_text("Command {} could not be found, are you \
+            sure you spelled it right")
+            .suggestion_text("Are you looking for {}?")
+            // hide commands that user can't call
+            .lacking_permissions(HelpBehaviour::Hide)
+            .lacking_role(HelpBehaviour::Hide)
+            .wrong_channel(HelpBehaviour::Strike)
+            // colors are nice, at least for those who aren't blind
+            .embed_success_colour(Colour::fooyoo())
+            .embed_error_colour(Colour::red())
+        )
+        // misc
+        .group("Miscellanious", |c| c
+            .command("stats", |c| c
+                .cmd(modules::stats::stats)
+                .desc("System information about TofuBot")))
+        // ranks
+        .group("Ranking", |c| c
+            .command("rank", |c| c
+                .cmd(modules::ranks::rank)
+                .bucket("Ranking")
+                .desc("Your current level and progress"))
+            .command("leaderboard", |c| c
+                .cmd(modules::ranks::leaderboard)
+                .bucket("Ranking")
+                .known_as("lb")
+                .desc("Top 10 users for this server")))
     );
 
     if let Err(why) = client.start() {

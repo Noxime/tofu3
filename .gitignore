@@ -2,3 +2,6 @@
 target/
 .env
 Cargo.lock
+convert_db.py
+dump.cvs
+users.json

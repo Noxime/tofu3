@@ -1,5 +1,6 @@
 use super::super::mongo;
 use serenity::utils::Colour;
+use serenity::model::id::UserId;
 
 // turn our score to a more human friendly level with a fancy algorithm of 
 // sqrt(score) / 3, the more difficult part is calculating the progress between
@@ -39,4 +40,35 @@ command!(rank(ctx, msg) {
             Progress: **{:.2}%**",
             level, progress * 100f64))
     ));
+});
+
+command!(leaderboard(ctx, msg) {
+    let _ = msg.channel_id.broadcast_typing();
+    let id = msg.guild_id().unwrap();
+
+    let users = {
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().unwrap();
+        mongo::get_top_users(db, id, 10)
+    };
+    let mut i = 0;
+    let fields: Vec<(String, String, bool)> = users.iter().map(|v| (
+        format!("{}: {}",
+            { i += 1; i },
+            UserId(v.user_id as u64).get().unwrap().name
+        ),
+        { 
+            let (l, p) = calculate_level(v.get_score(id));
+            format!("Level: **{}** (progress: **{}**)", l, p) 
+        },
+        false
+    )).collect();
+
+    let _ = msg.channel_id.send_message(|m| m.embed(|e| e
+        .color(Colour::fooyoo())
+        .title("Top 10 users")
+        .fields(fields)
+    ));
+
+    info!("{:#?}", users);
 });
