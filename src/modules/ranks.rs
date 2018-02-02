@@ -20,13 +20,14 @@ fn calculate_level(score: i64) -> (i64, f64) {
 }
 
 // access the database and print the score for this current server
-command!(rank(ctx, msg) {
+command!(rank(ctx, msg, args) {
     let _ = msg.channel_id.broadcast_typing();
+    let id = args.single::<UserId>().unwrap_or(msg.author.id);
 
     let user = {
         let data = ctx.data.lock();
         let db = data.get::<mongo::Mongo>().unwrap();
-        mongo::get_user(db, msg.author.id)
+        mongo::get_user(db, id)
     };
 
     let (level, progress) = calculate_level(user.get_score(
@@ -34,7 +35,8 @@ command!(rank(ctx, msg) {
 
     let _ = msg.channel_id.send_message(|m| m.embed(|e| e
         .color(Colour::fooyoo())
-        .title("Your current rank")
+        .title(&format!("Rank for {}", 
+            id.get().map(|v| v.name).unwrap_or("<unknown>".to_string())))
         .description(format!("\
             Current level: **{}**\n\
             Progress: **{:.2}%**",
@@ -42,15 +44,19 @@ command!(rank(ctx, msg) {
     ));
 });
 
+// find top 10 users for this server and post them in a list
 command!(leaderboard(ctx, msg) {
     let id = msg.guild_id().unwrap();
     let _ = msg.channel_id.broadcast_typing();
 
+    // load users from mongo
     let users = {
         let data = ctx.data.lock();
         let db = data.get::<mongo::Mongo>().unwrap();
         mongo::get_top_users(db, id, 10)
     };
+
+    // iterate over users and convert to viewable embed fields
     let mut i = 0;
     let fields: Vec<(String, String, bool)> = users.iter().map(|v| (
         format!("{}: {}",
@@ -60,16 +66,15 @@ command!(leaderboard(ctx, msg) {
         ),
         { 
             let (l, p) = calculate_level(v.get_score(id));
-            format!("Level: **{}**\nProgress: **{:.2}%**", l, p) 
+            format!("Level: **{}**\nProgress: **{:.2}%**", l, p * 100f64) 
         },
         false
     )).collect();
 
+    // send the embed with the fields constructed earlier
     let _ = msg.channel_id.send_message(|m| m.embed(|e| e
         .color(Colour::fooyoo())
         .title("Top 10 users")
         .fields(fields)
     ));
-
-    info!("{:#?}", users);
 });
