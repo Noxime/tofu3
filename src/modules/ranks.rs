@@ -55,7 +55,8 @@ command!(leaderboard(ctx, msg) {
     let fields: Vec<(String, String, bool)> = users.iter().map(|v| (
         format!("{}: {}",
             { i += 1; i },
-            UserId(v.user_id as u64).get().map(|v| v.name).unwrap_or("<none>")
+            UserId(v.user_id as u64).get().map(|v| v.name)
+                .unwrap_or("<none>".to_string())
         ),
         { 
             let (l, p) = calculate_level(v.get_score(id));
