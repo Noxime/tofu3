@@ -12,6 +12,7 @@ extern crate pretty_env_logger;
 extern crate mongodb;
 extern crate typemap;
 extern crate time;
+extern crate toml;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
@@ -125,13 +126,30 @@ fn main() {
         .group("Ranking", |c| c
             .command("rank", |c| c
                 .cmd(modules::ranks::rank)
-                .bucket("Ranking")
-                .desc("Your current level and progress"))
+                .bucket("ranking")
+                .desc("Your current level and progress in this discord server. \
+                    You can add a mention or a snowflake ID in the end to see \
+                    someone else's rank.")
+                .usage("[mention or snowflake]")
+                .example("@noxim#6410"))
             .command("leaderboard", |c| c
                 .cmd(modules::ranks::leaderboard)
-                .bucket("Ranking")
+                .bucket("ranking")
                 .known_as("lb")
-                .desc("Top 10 users for this server")))
+                .desc("See the top 10 users for this discord server. The \
+                levels are calculated with `√x ÷ 3`, where x is your XP. 5 XP \
+                is given for every 2 minutes of active chatting.")))
+        .group("Admin", |c| c
+            .command("settings", |c| c
+                .cmd(modules::settings::settings)
+                .bucket("admin")
+                .desc("Change settings for this discord server. You can call \
+                this command without a file to see and download your current \
+                configuration. You can set a new configuration by attaching \
+                a file to this command. The configuration format is called \
+                TOML and can be opened in programs such as Notepad++. See the \
+                TofuBot webpage for extra help.")
+                .usage("[file]")))
     );
 
     if let Err(why) = client.start() {
