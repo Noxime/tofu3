@@ -59,7 +59,7 @@ command!(leaderboard(ctx, msg) {
         ),
         { 
             let (l, p) = calculate_level(v.get_score(id));
-            format!("Level: **{}** (progress: **{}**)", l, p) 
+            format!("Level: **{}**\nProgress: **{:.2}%**", l, p) 
         },
         false
     )).collect();
