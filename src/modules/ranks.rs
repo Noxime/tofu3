@@ -43,8 +43,8 @@ command!(rank(ctx, msg) {
 });
 
 command!(leaderboard(ctx, msg) {
-    let _ = msg.channel_id.broadcast_typing();
     let id = msg.guild_id().unwrap();
+    let _ = msg.channel_id.broadcast_typing();
 
     let users = {
         let data = ctx.data.lock();
@@ -55,7 +55,7 @@ command!(leaderboard(ctx, msg) {
     let fields: Vec<(String, String, bool)> = users.iter().map(|v| (
         format!("{}: {}",
             { i += 1; i },
-            UserId(v.user_id as u64).get().unwrap().name
+            UserId(v.user_id as u64).get().map(|v| v.name).unwrap_or("<none>")
         ),
         { 
             let (l, p) = calculate_level(v.get_score(id));

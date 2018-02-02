@@ -39,6 +39,10 @@ struct DiscordHandler;
 
 impl EventHandler for DiscordHandler {
     fn message(&self, ctx: Context, msg: Message) {
+
+        if msg.author.bot {
+            return;
+        }
         // for our ranks, we need to add the score from this message to the db
         { // first check if even should give user score (aka 2min passed)
             let mut data = ctx.data.lock(); // we want to release this asap
@@ -113,7 +117,7 @@ fn main() {
             .embed_error_colour(Colour::red())
         )
         // misc
-        .group("Miscellanious", |c| c
+        .group("Miscellaneous", |c| c
             .command("stats", |c| c
                 .cmd(modules::stats::stats)
                 .desc("System information about TofuBot")))
