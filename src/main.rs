@@ -102,9 +102,10 @@ fn main() {
             mongo::get_config(db, id).staff()
         };
 
-        // check if the message author has any of the required staff roles
-        // OR if the author is the owner of this guild
-        roles.iter().any(|r| msg.author.has_role(id, *r))
+        // check if the author is the owner of this guild
+        // OR check if the message author has any of the required staff roles
+        id.get().unwrap().owner_id == msg.author.id
+        || roles.iter().any(|r| msg.author.has_role(id, *r))
     };
 
     // configure our discord framework
