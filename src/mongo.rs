@@ -4,7 +4,7 @@ use mongodb::db::{Database, ThreadedDatabase};
 use mongodb::coll::options::{FindOneAndUpdateOptions, FindOptions};
 use bson;
 use bson::Bson;
-use serenity::model::id::{GuildId, UserId};
+use serenity::model::id::{GuildId, UserId, RoleId};
 
 use std::collections::HashMap;
 
@@ -23,16 +23,29 @@ pub struct GuildConfig {
 }
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Changeable {
-    pub prefix: Option<String>
+    pub prefix: Option<String>, // guild prefix
+    pub staff: Option<Vec<i64>> // admin roles
 }
 impl GuildConfig {
     fn new(id: i64) -> Self {
         Self {
             guild_id: id,
             user: Changeable {
-                prefix: None
+                prefix: None,
+                staff: None,
             }
         }
+    }
+
+    // check if provided role id is set as a staff role. 
+    pub fn staff(&self) -> Vec<RoleId> {
+        let mut ret = vec![];
+        if let Some(ref roles) = self.user.staff {
+            for role in roles {
+                ret.push(RoleId(*role as u64));
+            }
+        }
+        ret
     }
 }
 

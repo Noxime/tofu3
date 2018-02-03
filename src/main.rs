@@ -16,7 +16,7 @@ extern crate toml;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
-    StandardFramework, HelpBehaviour, help_commands
+    StandardFramework, HelpBehaviour, help_commands, Args, CommandOptions
 };
 use serenity::utils::Colour;
 use serenity::model::channel::Message;
@@ -40,7 +40,7 @@ struct DiscordHandler;
 
 impl EventHandler for DiscordHandler {
     fn message(&self, ctx: Context, msg: Message) {
-
+        // don't activate for bots
         if msg.author.bot {
             return;
         }
@@ -57,6 +57,8 @@ impl EventHandler for DiscordHandler {
                 return;
             }
         }
+
+        // increase the authors rank by 5
         let data = ctx.data.lock(); // we want to release this asap
         let db = data.get::<mongo::Mongo>().unwrap(); // mongo access
         let mut user = mongo::get_user(db, msg.author.id);
@@ -90,6 +92,21 @@ fn main() {
         data.insert::<RankLock>(HashMap::new());
     }
 
+    // this closure checks if user has ability to run admin commands
+    let admin_check = |ctx: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions| {
+        let id = msg.guild_id().unwrap();
+        // get admin roles
+        let roles = {
+            let data = ctx.data.lock();
+            let db = data.get::<mongo::Mongo>().unwrap();
+            mongo::get_config(db, id).staff()
+        };
+
+        // check if the message author has any of the required staff roles
+        // OR if the author is the owner of this guild
+        roles.iter().any(|r| msg.author.has_role(id, *r))
+    };
+
     // configure our discord framework
     client.with_framework(StandardFramework::new()
         .configure(|c| c
@@ -111,7 +128,7 @@ fn main() {
             .suggestion_text("Are you looking for {}?")
             // hide commands that user can't call
             .lacking_permissions(HelpBehaviour::Hide)
-            .lacking_role(HelpBehaviour::Hide)
+            .lacking_role(HelpBehaviour::Nothing)
             .wrong_channel(HelpBehaviour::Strike)
             // colors are nice, at least for those who aren't blind
             .embed_success_colour(Colour::fooyoo())
@@ -142,6 +159,7 @@ fn main() {
         .group("Admin", |c| c
             .command("settings", |c| c
                 .cmd(modules::settings::settings)
+                .check(admin_check)
                 .bucket("admin")
                 .desc("Change settings for this discord server. You can call \
                 this command without a file to see and download your current \

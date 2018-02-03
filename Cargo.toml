@@ -1,7 +1,7 @@
 [package]
 name = "tofubot-rewrite-3"
 description = "like-ooh-ahh"
-version = "3.0.0-like-ooh-ahh+build.204"
+version = "3.0.0-like-ooh-ahh+build.236"
 authors = ["noxim#6410"]
 build = "build.rs"
 
