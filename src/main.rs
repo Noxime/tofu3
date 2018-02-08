@@ -13,6 +13,8 @@ extern crate mongodb;
 extern crate typemap;
 extern crate time;
 extern crate toml;
+extern crate reqwest;
+extern crate urbandictionary;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
@@ -139,7 +141,14 @@ fn main() {
         .group("Miscellaneous", |c| c
             .command("stats", |c| c
                 .cmd(modules::stats::stats)
-                .desc("System information about TofuBot")))
+                .desc("System information about TofuBot"))
+            .command("urban", |c| c
+                .cmd(modules::urban::urban)
+                .desc("Search urban dictionary for a word or a sentence.")
+                .usage("<search term>")
+                .example("bodge")
+                .known_as("ub")
+                .known_as("urbandictionary")))
         // ranks
         .group("Ranking", |c| c
             .command("rank", |c| c
