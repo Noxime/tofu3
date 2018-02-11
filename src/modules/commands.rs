@@ -6,6 +6,7 @@ use std::collections::HashMap;
 
 // register a new command in the database
 command!(new(ctx, msg, args) {
+    let _ = msg.channel_id.broadcast_typing();
     // name of our command
     let name = args.single::<String>()?;
     let content = args.full();
@@ -61,11 +62,77 @@ command!(new(ctx, msg, args) {
 
 // remove a command from this server
 command!(delete(ctx, msg, args) {
+    let _ = msg.channel_id.broadcast_typing();
+    let name = match args.single::<String>() {
+        Ok(s) => s,
+        Err(_) => {
+            match msg.channel_id.send_message(|m| m.embed(|e| e
+                .color(Colour::red())
+                .title("Argument error")
+                .description("Please provide the name of the command you want \
+                to remove."))) {
+                Ok(_) => {},
+                Err(why) => error!("MSG failed: {}", why)
+            }
+            return Ok(());
+        }
+    };
 
+    let mut cmds = {
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+            .unwrap_or(HashMap::new())
+    };
+
+    // try remove from cmds, and based on result notify user
+    match cmds.remove(&name.to_lowercase()) {
+        None => {
+            match msg.channel_id.send_message(|m| m.embed(|e| e
+                .color(Colour::red())
+                .title("Command doesn't exist")
+                .description("Could not find the command you wanted to remove, \
+                    are you sure you wrote it right?"))) {
+                Ok(_) => {},
+                Err(why) => error!("MSG failed: {}", why)
+            }
+        }
+        _ => {
+            match msg.channel_id.send_message(|m| m.embed(|e| e
+                .color(Colour::fooyoo())
+                .title("Command removed")
+                .description(format!("Command **{}** has been removed \
+                succesfully", name)))) {
+                Ok(_) => {},
+                Err(why) => error!("MSG failed: {}", why)
+            }
+        }
+    }
+
+    // commit our changes
+    {
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        let mut config = mongo::get_config(db, msg.guild_id().unwrap());
+        config.user.commands = Some(cmds);
+        mongo::set_config(db, &config);
+    }
+
+    /*
+    match msg.channel_id.send_message(|m| m.embed(|e| e
+        .color(Colour::red())
+        .title("Command doesn't exist")
+        .description("Could not find the command you wanted to remove, \
+            are you sure you wrote it right?"))) {
+        Ok(_) => {},
+        Err(why) => error!("MSG failed: {}", why)
+    }
+    */
 });
 
 // list commands available for this guild
 command!(list(ctx, msg, args) {
+    let _ = msg.channel_id.broadcast_typing();
     // page, but its 1 indexed
     let page = args.single::<u64>().unwrap_or(1);
     let cmds = { // load commands from Mongo, holding lock as little as possible

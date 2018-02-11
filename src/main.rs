@@ -198,16 +198,36 @@ fn main() {
                 TOML and can be opened in programs such as Notepad++. See the \
                 TofuBot webpage for extra help.")
                 .usage("[file]")
-                .max_args(1))
+                .max_args(1)))
+        .group("Commands", |c| c
             .command("new", |c| c
                 .cmd(modules::commands::new)
-                .min_args(2))
+                .check(admin_check)
+                .bucket("admin")
+                .min_args(2)
+                .example("!tunes https://youtu.be/XfR9iY5y94s")
+                .usage("<name> <content>")
+                .desc("Create a new custom command for this guild. Make sure \
+                you remember to include the prefix you want to use for that \
+                command, for example `*` or `!`."))
             .command("delete", |c| c
                 .cmd(modules::commands::delete)
-                .min_args(1))
+                .check(admin_check)
+                .bucket("admin")
+                .min_args(1)
+                .example("!tunes")
+                .usage("<name>")
+                .desc("Remove a previousley created custom command. Make sure \
+                you write the command name correctly."))
             .command("list", |c| c
                 .cmd(modules::commands::list)
-                .max_args(1)))
+                .bucket("commands")
+                .max_args(1)
+                .example("2")
+                .usage("<page>")
+                .desc("Use this command to see all the custom commands for \
+                this server. In case all the commands don't fit on the same \
+                page, you can provide a page number.")))
     );
 
     if let Err(why) = client.start() {
