@@ -58,3 +58,47 @@ command!(new(ctx, msg, args) {
         Err(why) => error!("MSG failed: {}", why)
     }
 });
+
+// remove a command from this server
+command!(delete(ctx, msg, args) {
+
+});
+
+// list commands available for this guild
+command!(list(ctx, msg, args) {
+    // page, but its 1 indexed
+    let page = args.single::<u64>().unwrap_or(1);
+    let cmds = { // load commands from Mongo, holding lock as little as possible
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+            .unwrap_or(HashMap::new())
+    };
+
+    // pages
+    let mut results: Vec<String> = vec![];
+    results.push("".into()); // element 0
+
+    // we need to transform these keys to max 2000 character "pages"
+    let mut iter = cmds.keys();
+    let mut i = 0;
+    while let Some(key) = iter.next() {
+        if results[i].len() + key.len() >= 2000 { // this page full, move to new
+            results.push("".to_string());
+            i += 1;
+        }
+
+        results[i].push_str(format!("{}\n", key).as_str());
+    }
+
+    let pages = results.len();
+    let page = (page as usize).max(1).min(pages);
+
+    match msg.channel_id.send_message(|m| m.embed(|e| e
+        .color(Colour::fooyoo())
+        .title(format!("All commands (page {}/{})", page, pages))
+        .description(results[page - 1].clone()))) {
+        Err(why) => error!("MSG failed: {}", why),
+        _ => {}
+    }
+});

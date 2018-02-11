@@ -165,7 +165,8 @@ fn main() {
                 .usage("<search term>")
                 .example("bodge")
                 .known_as("ub")
-                .known_as("urbandictionary")))
+                .known_as("urbandictionary")
+                .min_args(1)))
         // ranks
         .group("Ranking", |c| c
             .command("rank", |c| c
@@ -175,14 +176,16 @@ fn main() {
                     You can add a mention or a snowflake ID in the end to see \
                     someone else's rank.")
                 .usage("[mention or snowflake]")
-                .example("@noxim#6410"))
+                .example("@noxim#6410")
+                .max_args(1))
             .command("leaderboard", |c| c
                 .cmd(modules::ranks::leaderboard)
                 .bucket("ranking")
                 .known_as("lb")
                 .desc("See the top 10 users for this discord server. The \
                 levels are calculated with `√x ÷ 3`, where x is your XP. 5 XP \
-                is given for every 2 minutes of active chatting.")))
+                is given for every 2 minutes of active chatting.")
+                .max_args(0)))
         .group("Admin", |c| c
             .command("settings", |c| c
                 .cmd(modules::settings::settings)
@@ -194,11 +197,17 @@ fn main() {
                 a file to this command. The configuration format is called \
                 TOML and can be opened in programs such as Notepad++. See the \
                 TofuBot webpage for extra help.")
-                .usage("[file]"))
+                .usage("[file]")
+                .max_args(1))
             .command("new", |c| c
                 .cmd(modules::commands::new)
-                .min_args(2)
-                ))
+                .min_args(2))
+            .command("delete", |c| c
+                .cmd(modules::commands::delete)
+                .min_args(1))
+            .command("list", |c| c
+                .cmd(modules::commands::list)
+                .max_args(1)))
     );
 
     if let Err(why) = client.start() {
