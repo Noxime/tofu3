@@ -21,14 +21,15 @@ command!(urban(_ctx, msg, args) {
     // did we even find anything
     match response {
         Some(def) => {
-            // discord only accepts 2000 characters. 1800 should give us enough headroom
-            // for our example field to fit
+            // discord only accepts 2000 characters. 1800 should give us enough
+            // headroom for our example field to fit
             let mut s = def.definition.clone();
             if s.len() > 1800 {
                 s.truncate(1800);
             }
 
-            // discord doesn't allow empty fields, so add placeholder incase no example
+            // discord doesn't allow empty fields, so add placeholder incase no 
+            // example
             // TODO: I guess we just shouldnt send a field incase this is empty
             let mut e = def.example.clone();
             if e.is_empty() {

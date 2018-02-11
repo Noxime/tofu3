@@ -47,7 +47,7 @@ impl EventHandler for DiscordHandler {
             return;
         }
         // for our ranks, we need to add the score from this message to the db
-        { // first check if even should give user score (aka 2min passed)
+        let incr = { // first check if even should give user score (2min passed)
             let mut data = ctx.data.lock(); // we want to release this asap
             let lock = data.get_mut::<RankLock>().unwrap();
             let last = lock.entry(msg.author.id).or_insert(0);
@@ -55,18 +55,33 @@ impl EventHandler for DiscordHandler {
             // check 2 minutes passed
             if *last + 120 < now as u64 {
                 *last = now as u64;
+                true
             } else {
-                return;
+                false
             }
+        };
+
+        if incr {// increase the authors rank by 5
+            let data = ctx.data.lock(); // we want to release this asap
+            let db = data.get::<mongo::Mongo>().unwrap(); // mongo access
+            let mut user = mongo::get_user(db, msg.author.id);
+            let score = user.get_score(msg.guild_id().unwrap()) + 5; //incr xp 5
+            user.set_score(msg.guild_id().unwrap(), score);
+            mongo::set_user(db, &user);
         }
 
-        // increase the authors rank by 5
-        let data = ctx.data.lock(); // we want to release this asap
-        let db = data.get::<mongo::Mongo>().unwrap(); // mongo access
-        let mut user = mongo::get_user(db, msg.author.id);
-        let score = user.get_score(msg.guild_id().unwrap()) + 5; //incr 5 legacy
-        user.set_score(msg.guild_id().unwrap(), score);
-        mongo::set_user(db, &user);
+        if let Some(cmds) = { // activate for commandeeros
+            let data = ctx.data.lock();
+            let db = data.get::<mongo::Mongo>().unwrap();
+            mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+        } { // we have commands
+            if let Some(v) = cmds.get(&msg.content.to_lowercase()) {
+                match msg.channel_id.send_message(|m| m.content(v)) {
+                    Err(why) => error!("MSG failed: {}", why),
+                    _ => {}
+                }
+            }
+        }
     }
 }
 
@@ -95,7 +110,9 @@ fn main() {
     }
 
     // this closure checks if user has ability to run admin commands
-    let admin_check = |ctx: &mut Context, msg: &Message, _: &mut Args, _: &CommandOptions| {
+    let admin_check = |ctx: &mut Context, msg: &Message, _: &mut Args, 
+        _: &CommandOptions| {
+
         let id = msg.guild_id().unwrap();
         // get admin roles
         let roles = {
@@ -177,7 +194,11 @@ fn main() {
                 a file to this command. The configuration format is called \
                 TOML and can be opened in programs such as Notepad++. See the \
                 TofuBot webpage for extra help.")
-                .usage("[file]")))
+                .usage("[file]"))
+            .command("new", |c| c
+                .cmd(modules::commands::new)
+                .min_args(2)
+                ))
     );
 
     if let Err(why) = client.start() {

@@ -3,3 +3,4 @@ pub mod stats;
 pub mod ranks;
 pub mod settings;
 pub mod urban;
+pub mod commands;

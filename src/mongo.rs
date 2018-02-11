@@ -24,7 +24,8 @@ pub struct GuildConfig {
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Changeable {
     pub prefix: Option<String>, // guild prefix
-    pub staff: Option<Vec<i64>> // admin roles
+    pub staff: Option<Vec<i64>>, // admin roles
+    pub commands: Option<HashMap<String, String>>, // custom commands
 }
 impl GuildConfig {
     fn new(id: i64) -> Self {
@@ -33,6 +34,7 @@ impl GuildConfig {
             user: Changeable {
                 prefix: None,
                 staff: None,
+                commands: None,
             }
         }
     }
