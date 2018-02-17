@@ -28,6 +28,7 @@ use serenity::utils::Colour;
 use serenity::model::channel::Message;
 use serenity::model::user::User;
 use serenity::model::guild::Member;
+use serenity::model::event::MessageUpdateEvent;
 use serenity::model::id::{UserId, GuildId, ChannelId, MessageId};
 use typemap::Key;
 
@@ -65,6 +66,9 @@ impl EventHandler for DiscordHandler {
     }
     fn message_delete(&self, ctx: Context, id: ChannelId, msg: MessageId) {
         modules::logging::message_delete(&ctx, &id, &msg);
+    }
+    fn message_update(&self, ctx: Context, msg: MessageUpdateEvent) {
+        modules::logging::message_edit(&ctx, &msg);
     }
 
     fn message(&self, ctx: Context, msg: Message) {
