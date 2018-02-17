@@ -27,6 +27,7 @@ use serenity::framework::standard::{
 use serenity::utils::Colour;
 use serenity::model::channel::Message;
 use serenity::model::user::User;
+use serenity::model::guild::Member;
 use serenity::model::id::{UserId, GuildId};
 use typemap::Key;
 
@@ -54,6 +55,13 @@ impl EventHandler for DiscordHandler {
     }
     fn guild_ban_removal(&self, ctx: Context, id: GuildId, user: User) {
         modules::logging::unbanned(&ctx, &id, &user);
+    }
+    fn guild_member_addition(&self, ctx: Context, id: GuildId, member: Member) {
+        modules::logging::user_join(&ctx, &id, &member);
+    }
+    fn guild_member_removal(&self, ctx: Context, id: GuildId, user: User,
+    _: Option<Member>) {
+        modules::logging::user_leave(&ctx, &id, &user);
     }
 
     fn message(&self, ctx: Context, msg: Message) {
@@ -127,6 +135,7 @@ fn before(_: &mut Context, _: &Message) -> bool {
 fn after(ctx: &mut Context, msg: &Message, ret: &Result<(), CommandError>) {
     if ret.is_err() {
         dog::incr("commands.errors", vec![]);
+        error!("Error in command: {:?}", ret);
     } else {
         dog::incr("commands.executes", vec![]);
     }
