@@ -4,8 +4,10 @@ use mongodb::db::{Database, ThreadedDatabase};
 use mongodb::coll::options::{FindOneAndUpdateOptions, FindOptions};
 use bson;
 use bson::Bson;
-use serenity::model::id::{GuildId, UserId, RoleId, ChannelId};
+use serenity::model::id::{GuildId, UserId, RoleId, ChannelId, MessageId};
+use serenity::model::channel::Message;
 
+use std::convert::From;
 use std::collections::HashMap;
 
 // This stores our mongo database in our framework
@@ -80,6 +82,35 @@ impl UserConfig {
     }
 }
 
+// we like to store all discord messages locally too because someone might
+// delete or edit and we want to possibly run analysis on these messages so
+// instead of hitting discord api constantly we can just look at our own shit
+// and wow this is a long sentance but who cares really its just me reading the
+// source
+#[derive(Serialize, Deserialize, Debug)]
+pub struct MongoMessage {
+    #[serde(rename = "_id")]
+    pub message_id: i64,
+    pub channel_id: i64,
+    pub user_id: i64,
+    pub content: String,
+}
+impl From<Message> for MongoMessage {
+    fn from(msg: Message) -> Self {
+        Self {
+            message_id: msg.id.0 as i64,
+            channel_id: msg.channel_id.0 as i64,
+            user_id: msg.author.id.0 as i64,
+            content: msg.content,
+        }
+    }
+}
+impl MongoMessage {
+    pub fn user(&self) ->  UserId {
+        UserId(self.user_id as u64)
+    }
+}
+
 // connect to a mongodb instance running on this machine and return a database
 // from it
 pub fn connect() -> Database {
@@ -87,6 +118,49 @@ pub fn connect() -> Database {
         .expect("Failed to connect to MongoDB");
     info!("Connected to MongoDB");
     client.db("tofu3")
+}
+
+// fetch a stored message from MongoDB with message id
+pub fn get_message(db: &Database, id: MessageId) -> Option<MongoMessage> {
+    let collection = db.collection("messages");
+    match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
+        Ok(option) => {
+            match option {
+                Some(value) => Some(bson::from_bson(Bson::Document(value))
+                    .expect("Failed to deserialize message")),
+                None => None
+            }
+        },
+        Err(why) => {
+            error!("Failed to access MongoDB: {:#?}", why);
+            None
+        }
+    }
+}
+
+// put a new message in the db
+pub fn set_message(db: &Database, msg: &MongoMessage) {
+    let options = FindOneAndUpdateOptions {
+        return_document: None,
+        max_time_ms: None,
+        projection: None,
+        sort: None,
+        upsert: Some(true),
+        write_concern: None
+    };
+
+    let collection = db.collection("messages");
+    if let Bson::Document(document) = bson::to_bson(msg).unwrap() {
+        match collection.find_one_and_replace(
+            doc! { "_id" => msg.message_id },
+            document,
+            Some(options)) {
+            Ok(_) => {},
+            Err(why) => {
+                error!("Failed to write mongo message: {}", why);
+            }
+        }
+    }
 }
 
 // fetch a config from mongo

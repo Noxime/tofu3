@@ -28,7 +28,7 @@ use serenity::utils::Colour;
 use serenity::model::channel::Message;
 use serenity::model::user::User;
 use serenity::model::guild::Member;
-use serenity::model::id::{UserId, GuildId};
+use serenity::model::id::{UserId, GuildId, ChannelId, MessageId};
 use typemap::Key;
 
 use std::collections::HashMap;
@@ -63,12 +63,32 @@ impl EventHandler for DiscordHandler {
     _: Option<Member>) {
         modules::logging::user_leave(&ctx, &id, &user);
     }
+    fn message_delete(&self, ctx: Context, id: ChannelId, msg: MessageId) {
+        modules::logging::message_delete(&ctx, &id, &msg);
+    }
 
     fn message(&self, ctx: Context, msg: Message) {
+        // fancy graphs on datadog
+        if msg.is_own() {
+            dog::incr("messages.sent", vec![]);
+        } else {
+            dog::incr("messages.received", vec![]);
+        }
+
+        // save the message in mongo
+        {
+            let data = ctx.data.lock();
+            let db = data.get::<mongo::Mongo>().expect("No DB?");
+            // wait wtf
+            mongo::set_message(db, &mongo::MongoMessage::from(msg.clone()));
+        }
+
         // don't activate for bots
         if msg.author.bot {
             return;
         }
+
+
         // for our ranks, we need to add the score from this message to the db
         let incr = { // first check if even should give user score (2min passed)
             let mut data = ctx.data.lock(); // we want to release this asap
@@ -132,7 +152,7 @@ fn before(_: &mut Context, _: &Message) -> bool {
 }
 
 // after any command, to report internal errors
-fn after(ctx: &mut Context, msg: &Message, ret: &Result<(), CommandError>) {
+fn after(_: &mut Context, _: &Message, ret: &Result<(), CommandError>) {
     if ret.is_err() {
         dog::incr("commands.errors", vec![]);
         error!("Error in command: {:?}", ret);

@@ -2,7 +2,7 @@ use mongo;
 use dog;
 
 use time;
-use serenity::model::id::{ChannelId, GuildId};
+use serenity::model::id::{ChannelId, GuildId, MessageId};
 use serenity::model::user::User;
 use serenity::model::guild::Member;
 use serenity::client::Context;
@@ -94,5 +94,74 @@ pub fn user_leave(ctx: &Context, id: &GuildId, user: &User) {
             Err(why) => error!("MSG failed: {}", why),
             _ => {},
         }
+    }
+}
+
+// user removed a message. Unfortunately the function doesn't give the original
+// message content, so we have to save them in our own database. This in turn
+// means we might not have all messages aka we can't show what exactly was dletd
+pub fn message_delete(ctx: &Context, id: &ChannelId, msg: &MessageId) {
+    dog::incr("messages.deletes", vec![]);
+
+    let log = match log(ctx, id.get().expect("Failed get guild").id().0) {
+        Some(v) => v,
+        None => { return; }
+    };
+
+    let s = if let Some(old) = {
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        mongo::get_message(db, *msg)
+    } {
+        // Hey we have the message in our database, show it
+        let user = old.user().get();
+        let username = match user {
+            Ok(ref u) => u.name.clone(),
+            Err(_) => "<unknown>".to_string(),
+        };
+        let discr = match user {
+            Ok(ref u) => u.discriminator.to_string(),
+            Err(_) => "<unknown>".to_string(),
+        };
+        let user_id = user.map(|u| u.id.to_string())
+            .unwrap_or("<unknown>".to_string());
+        let channel_name = id.get().map(|c| c.guild()
+            .map(|c| c.read().name.clone())
+            .unwrap_or("<unknown>".to_string()))
+            .unwrap_or("<unknown>".to_string());
+
+        log.send_message(|m| m.embed(|e| e
+            .title("Message deleted")
+            .description(old.content)
+            .field("User", format!("Name: **{}#{}**\nSnow: **{}**",
+                username, discr, user_id), true)
+            .field("Message", format!("Snow: **{}**\nChannel: **{}**",
+                id, channel_name), true)
+            .color(Colour::fooyoo())
+            .footer(|f| f.text(time::now_utc().rfc3339()))
+        ))
+
+
+    } else { // oof we didnt have that message in our database
+        let channel_name = id.get().map(|c| c.guild()
+            .map(|c| c.read().name.clone())
+            .unwrap_or("<unknown>".to_string()))
+            .unwrap_or("<unknown>".to_string());
+
+        log.send_message(|m| m.embed(|e| e
+            .title("Message deleted")
+            .description("A message was deleted but unfortunately TofuBot does \
+            not know what it was. Sorry about that!")
+            .field("Info", format!("Snow: **{}**\nChannel: **{}**",
+                msg, channel_name), true)
+            .color(Colour::fooyoo())
+            .footer(|f| f.text(time::now_utc().rfc3339()))
+        ))
+    };
+
+    // this is final check we actually delivered the message
+    match s {
+        Ok(_) => {},
+        Err(why) => error!("MSG failed: {}", why)
     }
 }
