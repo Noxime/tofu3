@@ -4,7 +4,7 @@ use mongodb::db::{Database, ThreadedDatabase};
 use mongodb::coll::options::{FindOneAndUpdateOptions, FindOptions};
 use bson;
 use bson::Bson;
-use serenity::model::id::{GuildId, UserId, RoleId};
+use serenity::model::id::{GuildId, UserId, RoleId, ChannelId};
 
 use std::collections::HashMap;
 
@@ -26,6 +26,7 @@ pub struct Changeable {
     pub prefix: Option<String>, // guild prefix
     pub staff: Option<Vec<i64>>, // admin roles
     pub commands: Option<HashMap<String, String>>, // custom commands
+    pub log_channel: Option<i64>, // the channel we output our logging to
 }
 impl GuildConfig {
     fn new(id: i64) -> Self {
@@ -35,6 +36,7 @@ impl GuildConfig {
                 prefix: None,
                 staff: None,
                 commands: None,
+                log_channel: None,
             }
         }
     }
@@ -48,6 +50,10 @@ impl GuildConfig {
             }
         }
         ret
+    }
+
+    pub fn log(&self) -> Option<ChannelId> {
+        self.user.log_channel.map(|v| ChannelId::from(v as u64))
     }
 }
 

@@ -15,20 +15,26 @@ extern crate time;
 extern crate toml;
 extern crate reqwest;
 extern crate urbandictionary;
+extern crate dogstatsd;
+#[macro_use]
+extern crate lazy_static;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
-    StandardFramework, HelpBehaviour, help_commands, Args, CommandOptions
+    StandardFramework, HelpBehaviour, help_commands, Args, CommandOptions, 
+    CommandError,
 };
 use serenity::utils::Colour;
 use serenity::model::channel::Message;
-use serenity::model::id::{UserId};
+use serenity::model::user::User;
+use serenity::model::id::{UserId, GuildId};
 use typemap::Key;
 
 use std::collections::HashMap;
 
 mod mongo;
 mod modules;
+mod dog;
 
 // this makes sure we don't give too much score too often. The hashmap contains
 // a user id and then the last unix timestamp they got some score. So we wait 2
@@ -41,6 +47,15 @@ impl Key for RankLock {
 struct DiscordHandler;
 
 impl EventHandler for DiscordHandler {
+
+    // logging
+    fn guild_ban_addition(&self, ctx: Context, id: GuildId, user: User) {
+        modules::logging::banned(&ctx, &id, &user);
+    }
+    fn guild_ban_removal(&self, ctx: Context, id: GuildId, user: User) {
+        modules::logging::unbanned(&ctx, &id, &user);
+    }
+
     fn message(&self, ctx: Context, msg: Message) {
         // don't activate for bots
         if msg.author.bot {
@@ -85,6 +100,38 @@ impl EventHandler for DiscordHandler {
     }
 }
 
+// make sure user is allowed to run these admin level commands
+fn admin_check(ctx: &mut Context, msg: &Message, _: &mut Args, 
+_: &CommandOptions) -> bool {
+
+    let id = msg.guild_id().unwrap();
+    // get admin roles
+    let roles = {
+        let data = ctx.data.lock();
+        let db = data.get::<mongo::Mongo>().unwrap();
+        mongo::get_config(db, id).staff()
+    };
+    // check if the author is the owner of this guild
+    // OR check if the message author has any of the required staff roles
+    id.get().unwrap().owner_id == msg.author.id
+    || roles.iter().any(|r| msg.author.has_role(id, *r))
+}
+
+// run before any command
+fn before(_: &mut Context, _: &Message) -> bool {
+    dog::incr("commands.calls", vec![]);
+    true
+}
+
+// after any command, to report internal errors
+fn after(ctx: &mut Context, msg: &Message, ret: &Result<(), CommandError>) {
+    if ret.is_err() {
+        dog::incr("commands.errors", vec![]);
+    } else {
+        dog::incr("commands.executes", vec![]);
+    }
+}
+
 fn main() {
     // load environment variables
     if let Err(why) = kankyo::load() {
@@ -108,24 +155,6 @@ fn main() {
         data.insert::<mongo::Mongo>(mongo::connect());
         data.insert::<RankLock>(HashMap::new());
     }
-
-    // this closure checks if user has ability to run admin commands
-    let admin_check = |ctx: &mut Context, msg: &Message, _: &mut Args, 
-        _: &CommandOptions| {
-
-        let id = msg.guild_id().unwrap();
-        // get admin roles
-        let roles = {
-            let data = ctx.data.lock();
-            let db = data.get::<mongo::Mongo>().unwrap();
-            mongo::get_config(db, id).staff()
-        };
-
-        // check if the author is the owner of this guild
-        // OR check if the message author has any of the required staff roles
-        id.get().unwrap().owner_id == msg.author.id
-        || roles.iter().any(|r| msg.author.has_role(id, *r))
-    };
 
     // configure our discord framework
     client.with_framework(StandardFramework::new()
@@ -158,7 +187,9 @@ fn main() {
         .group("Miscellaneous", |c| c
             .command("stats", |c| c
                 .cmd(modules::stats::stats)
-                .desc("System information about TofuBot"))
+                .desc("System information about TofuBot")
+                .before(before)
+                .after(after))
             .command("urban", |c| c
                 .cmd(modules::urban::urban)
                 .desc("Search urban dictionary for a word or a sentence.")
@@ -166,7 +197,9 @@ fn main() {
                 .example("bodge")
                 .known_as("ub")
                 .known_as("urbandictionary")
-                .min_args(1)))
+                .min_args(1)
+                .before(before)
+                .after(after)))
         // ranks
         .group("Ranking", |c| c
             .command("rank", |c| c
@@ -177,7 +210,9 @@ fn main() {
                     someone else's rank.")
                 .usage("[mention or snowflake]")
                 .example("@noxim#6410")
-                .max_args(1))
+                .max_args(1)
+                .before(before)
+                .after(after))
             .command("leaderboard", |c| c
                 .cmd(modules::ranks::leaderboard)
                 .bucket("ranking")
@@ -185,7 +220,9 @@ fn main() {
                 .desc("See the top 10 users for this discord server. The \
                 levels are calculated with `√x ÷ 3`, where x is your XP. 5 XP \
                 is given for every 2 minutes of active chatting.")
-                .max_args(0)))
+                .max_args(0)
+                .before(before)
+                .after(after)))
         .group("Admin", |c| c
             .command("settings", |c| c
                 .cmd(modules::settings::settings)
@@ -198,7 +235,9 @@ fn main() {
                 TOML and can be opened in programs such as Notepad++. See the \
                 TofuBot webpage for extra help.")
                 .usage("[file]")
-                .max_args(1)))
+                .max_args(1)
+                .before(before)
+                .after(after)))
         .group("Commands", |c| c
             .command("new", |c| c
                 .cmd(modules::commands::new)
@@ -209,7 +248,9 @@ fn main() {
                 .usage("<name> <content>")
                 .desc("Create a new custom command for this guild. Make sure \
                 you remember to include the prefix you want to use for that \
-                command, for example `*` or `!`."))
+                command, for example `*` or `!`.")
+                .before(before)
+                .after(after))
             .command("delete", |c| c
                 .cmd(modules::commands::delete)
                 .check(admin_check)
@@ -218,7 +259,9 @@ fn main() {
                 .example("!tunes")
                 .usage("<name>")
                 .desc("Remove a previousley created custom command. Make sure \
-                you write the command name correctly."))
+                you write the command name correctly.")
+                .before(before)
+                .after(after))
             .command("list", |c| c
                 .cmd(modules::commands::list)
                 .bucket("commands")
@@ -227,7 +270,9 @@ fn main() {
                 .usage("<page>")
                 .desc("Use this command to see all the custom commands for \
                 this server. In case all the commands don't fit on the same \
-                page, you can provide a page number.")))
+                page, you can provide a page number.")
+                .before(before)
+                .after(after)))
     );
 
     if let Err(why) = client.start() {

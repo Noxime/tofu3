@@ -7,16 +7,14 @@
 extern crate regex;
 use regex::{ Regex, Captures };
 
-use std::error::Error;
 use std::fs::File;
 use std::io::prelude::*;
-use std::path::Path;
 use std::env;
 
 fn main() {
     let mut file1 = File::open("Cargo.toml").unwrap();
     let mut data = String::new();
-    file1.read_to_string(&mut data);
+    let _ = file1.read_to_string(&mut data);
     drop(file1);
     let mut file2 = File::create("Cargo.toml").unwrap();
     //Our holy regex for matching version number from TOML
@@ -26,7 +24,7 @@ fn main() {
         format!("{}{}{}", &caps[1], (&caps[2]).to_string().parse::<u64>().unwrap() + 1, &caps[3])
     }).to_string();
 
-    file2.write_all(new.as_bytes());
+    let _ = file2.write_all(new.as_bytes());
     drop(file2);
 
     println!("cargo:rustc-env=CARGO_PKG_PROFILE={}", env::var("PROFILE").unwrap())

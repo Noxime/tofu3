@@ -1,14 +1,14 @@
 [package]
 name = "tofubot"
 description = "like-ooh-ahh"
-version = "3.1.1-like-ooh-ahh+build.330"
+version = "3.1.1-like-ooh-ahh+build.392"
 authors = ["noxim#6410"]
 build = "build.rs"
 
 [dependencies]
 kankyo = "0.2.0"
 log = "0.4.0"
-pretty_env_logger = "0.2.0"
+pretty_env_logger = { path = "../datadog-env-logger" }
 serde = "1.0.21"
 serde_derive = "1.0.21"
 bson = "0.10.0"
@@ -18,6 +18,8 @@ time = "0.1.39"
 toml = "0.4.5"
 urbandictionary = "0.3.0"
 reqwest = "0.8.4"
+dogstatsd = "0.4.0"
+lazy_static = "1.0.0"
 
 [dependencies.serenity]
 version = "0.5.1"
