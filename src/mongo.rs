@@ -10,6 +10,8 @@ use serenity::model::channel::Message;
 use std::convert::From;
 use std::collections::HashMap;
 
+use dog;
+
 // This stores our mongo database in our framework
 pub struct Mongo;
 impl Key for Mongo {
@@ -122,172 +124,206 @@ pub fn connect() -> Database {
 
 // fetch a stored message from MongoDB with message id
 pub fn get_message(db: &Database, id: MessageId) -> Option<MongoMessage> {
-    let collection = db.collection("messages");
-    match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
-        Ok(option) => {
-            match option {
-                Some(value) => Some(bson::from_bson(Bson::Document(value))
-                    .expect("Failed to deserialize message")),
-                None => None
+    let mut ret: Option<MongoMessage> = None;
+    dog::incr("db.message.get.count", vec![]);
+    dog::time("db.message.get", vec![], || { // profiling is nice
+
+        let collection = db.collection("messages");
+        ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
+            Ok(option) => {
+                match option {
+                    Some(value) => Some(bson::from_bson(Bson::Document(value))
+                        .expect("Failed to deserialize message")),
+                    None => None
+                }
+            },
+            Err(why) => {
+                error!("Failed to access MongoDB: {:#?}", why);
+                None
             }
-        },
-        Err(why) => {
-            error!("Failed to access MongoDB: {:#?}", why);
-            None
-        }
-    }
+        };
+    });
+
+    ret
 }
 
 // put a new message in the db
 pub fn set_message(db: &Database, msg: &MongoMessage) {
-    let options = FindOneAndUpdateOptions {
-        return_document: None,
-        max_time_ms: None,
-        projection: None,
-        sort: None,
-        upsert: Some(true),
-        write_concern: None
-    };
+    dog::incr("db.message.set.count", vec![]);
+    dog::time("db.message.set", vec![], || { // profiling is nice
+        let options = FindOneAndUpdateOptions {
+            return_document: None,
+            max_time_ms: None,
+            projection: None,
+            sort: None,
+            upsert: Some(true),
+            write_concern: None
+        };
 
-    let collection = db.collection("messages");
-    if let Bson::Document(document) = bson::to_bson(msg).unwrap() {
-        match collection.find_one_and_replace(
-            doc! { "_id" => msg.message_id },
-            document,
-            Some(options)) {
-            Ok(_) => {},
-            Err(why) => {
-                error!("Failed to write mongo message: {}", why);
+        let collection = db.collection("messages");
+        if let Bson::Document(document) = bson::to_bson(msg).unwrap() {
+            match collection.find_one_and_replace(
+                doc! { "_id" => msg.message_id },
+                document,
+                Some(options)) {
+                Ok(_) => {},
+                Err(why) => {
+                    error!("Failed to write mongo message: {}", why);
+                }
             }
         }
-    }
+    });
 }
 
 // fetch a config from mongo
 pub fn get_config(db: &Database, id: GuildId) -> GuildConfig {
-    let collection = db.collection("configs");
-    match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
-        Ok(option) => {
-            match option {
-                Some(value) => bson::from_bson(Bson::Document(value))
-                    .expect("Failed to deserialize guild config"),
-                None => {
-                    let config = GuildConfig::new(id.0 as i64);
-                    set_config(db, &config);
-                    config
+    let mut ret = GuildConfig::new(id.0 as i64);
+    dog::incr("db.config.get.count", vec![]);
+    dog::time("db.config.get", vec![], || {
+
+        let collection = db.collection("configs");
+        ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
+            Ok(option) => {
+                match option {
+                    Some(value) => bson::from_bson(Bson::Document(value))
+                        .expect("Failed to deserialize guild config"),
+                    None => {
+                        let config = GuildConfig::new(id.0 as i64);
+                        set_config(db, &config);
+                        config
+                    }
                 }
+            },
+            Err(why) => {
+                error!("Failed to access MongoDB: {:#?}", why);
+                let config = GuildConfig::new(id.0 as i64);
+                set_config(db, &config);
+                config
             }
-        },
-        Err(why) => {
-            error!("Failed to access MongoDB: {:#?}", why);
-            let config = GuildConfig::new(id.0 as i64);
-            set_config(db, &config);
-            config
         }
-    }
+    });
+
+    ret
 }
 
 pub fn set_config(db: &Database, config: &GuildConfig) {
-    // turn on upsert
-    let options = FindOneAndUpdateOptions {
-        return_document: None,
-        max_time_ms: None,
-        projection: None,
-        sort: None,
-        upsert: Some(true),
-        write_concern: None
-    };
-    let collection = db.collection("configs");
-    if let Bson::Document(document) = bson::to_bson(&config).unwrap() {
-        match collection.find_one_and_replace(
-            doc!{ "_id" => config.guild_id }, 
-            document,
-            Some(options)) {
-            Ok(_) => {},
-            Err(why) => {
-                error!("Failed to set a guild config: {:#?}", why);
+    dog::incr("db.config.set.count", vec![]);
+    dog::time("db.config.set", vec![], || {
+        // turn on upsert
+        let options = FindOneAndUpdateOptions {
+            return_document: None,
+            max_time_ms: None,
+            projection: None,
+            sort: None,
+            upsert: Some(true),
+            write_concern: None
+        };
+        let collection = db.collection("configs");
+        if let Bson::Document(document) = bson::to_bson(&config).unwrap() {
+            match collection.find_one_and_replace(
+                doc!{ "_id" => config.guild_id }, 
+                document,
+                Some(options)) {
+                Ok(_) => {},
+                Err(why) => {
+                    error!("Failed to set a guild config: {:#?}", why);
+                }
             }
         }
-    }
+    });
 }
 
 pub fn get_user(db: &Database, id: UserId) -> UserConfig {
-    let collection = db.collection("users");
-    match collection.find_one(Some(doc! { "_id": id.0 as i64 }), None) {
-        Ok(option) => {
-            match option {
-                Some(value) => bson::from_bson(Bson::Document(value))
-                    .expect(format!("Failed to deserialize user config {}", 
-                        id.0 as i64).as_str()),
-                None => {
-                    let user = UserConfig::new(id.0 as i64);
-                    set_user(db, &user);
-                    user
+    let mut ret = UserConfig::new(id.0 as i64);
+    dog::incr("db.user.get.count", vec![]);
+    dog::time("db.user.get", vec![], || {
+
+        let collection = db.collection("users");
+        ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
+            Ok(option) => {
+                match option {
+                    Some(value) => bson::from_bson(Bson::Document(value))
+                        .expect(format!("Failed to deserialize user config {}", 
+                            id.0 as i64).as_str()),
+                    None => {
+                        let user = UserConfig::new(id.0 as i64);
+                        set_user(db, &user);
+                        user
+                    }
                 }
+            },
+            Err(why) => {
+                error!("Failed to access MongoDB: {:#?}", why);
+                let user = UserConfig::new(id.0 as i64);
+                set_user(db, &user);
+                user
             }
-        },
-        Err(why) => {
-            error!("Failed to access MongoDB: {:#?}", why);
-            let user = UserConfig::new(id.0 as i64);
-            set_user(db, &user);
-            user
         }
-    }
+        });
+
+    ret
 }
 
 pub fn set_user(db: &Database, user: &UserConfig) {
-    // turn on upsert
-    let options = FindOneAndUpdateOptions {
-        return_document: None,
-        max_time_ms: None,
-        projection: None,
-        sort: None,
-        upsert: Some(true),
-        write_concern: None
-    };
-    let collection = db.collection("users");
-    if let Bson::Document(document) = bson::to_bson(&user).unwrap() {
-        match collection.find_one_and_replace(
-            doc!{ "_id" => user.user_id }, 
-            document,
-            Some(options)) {
-            Ok(_) => {},
-            Err(why) => {
-                error!("Failed to set a user config for {}: {:#?}", 
-                    user.user_id, 
-                    why);
+    dog::incr("db.user.set.count", vec![]);
+    dog::time("db.user.set", vec![], || {
+        // turn on upsert
+        let options = FindOneAndUpdateOptions {
+            return_document: None,
+            max_time_ms: None,
+            projection: None,
+            sort: None,
+            upsert: Some(true),
+            write_concern: None
+        };
+        let collection = db.collection("users");
+        if let Bson::Document(document) = bson::to_bson(&user).unwrap() {
+            match collection.find_one_and_replace(
+                doc!{ "_id" => user.user_id }, 
+                document,
+                Some(options)) {
+                Ok(_) => {},
+                Err(why) => {
+                    error!("Failed to set a user config for {}: {:#?}", 
+                        user.user_id, 
+                        why);
+                }
             }
         }
-    }
+    });
 }
 
 // find the users with top score in certain guild
 pub fn get_top_users(db: &Database, id: GuildId, limit: i64) -> Vec<UserConfig> {
     let mut results: Vec<UserConfig> = vec![];
-    // set a sorting mode based on the guild id
-    let mut options = FindOptions::new();
-    options.sort = Some(doc! {
-        format!("scores.{}", id): -1 // -1 means biggest first
+
+    dog::incr("db.leaderboard.count", vec![]);
+    dog::time("db.leaderboard", vec![format!("guild:{}", id)], || {
+        // set a sorting mode based on the guild id
+        let mut options = FindOptions::new();
+        options.sort = Some(doc! {
+            format!("scores.{}", id): -1 // -1 means biggest first
+        });
+        options.limit = Some(limit);
+
+        // we seach in users collection
+        let collection = db.collection("users");
+        debug!("scores.{}", id);
+        // our results
+        let cursor = collection.find(Some(doc! {
+            format!("scores.{}", id): doc! { "$exists": true }
+        }), Some(options)).unwrap();
+
+        // deserialize all our results
+        for item in cursor {
+            let doc = item.unwrap();
+
+            let parsed = bson::from_bson(Bson::Document(doc)).expect(
+                &format!("Failed to deserialize user"));
+
+            results.push(parsed);
+        }
     });
-    options.limit = Some(limit);
 
-    // we seach in users collection
-    let collection = db.collection("users");
-    debug!("scores.{}", id);
-    // our results
-    let cursor = collection.find(Some(doc! {
-        format!("scores.{}", id): doc! { "$exists": true }
-    }), Some(options)).unwrap();
-
-    // deserialize all our results
-    for item in cursor {
-        let doc = item.unwrap();
-
-        let parsed = bson::from_bson(Bson::Document(doc)).expect(
-            &format!("Failed to deserialize user"));
-
-        results.push(parsed);
-    }
-
-    return results;
+    results
 }

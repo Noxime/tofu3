@@ -21,3 +21,13 @@ pub fn incr(name: &str, tags: Vec<String>) {
 pub fn decr(name: &str, tags: Vec<String>) {
     DOG.decr(name, [&vec()[..], &tags[..]].concat()).unwrap();
 }
+
+#[allow(dead_code)]
+pub fn set(name: &str, val: i64, tags: Vec<String>) {
+    DOG.gauge(name, &val.to_string(), [&vec()[..], &tags[..]].concat()).unwrap();
+}
+
+#[allow(dead_code)]
+pub fn time<F: FnOnce()>(name: &str, tags: Vec<String>, block: F) {
+    DOG.time(name, tags, block).unwrap();
+}
