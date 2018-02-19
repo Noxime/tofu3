@@ -28,6 +28,6 @@ fn main() {
     let _ = file2.write_all(new.as_bytes());
     drop(file2);
 
-    println!("cargo:rustc-env=CARGO_PKG_PROFILE={}", env::var("PROFILE").unwrap())
+    println!("cargo:rustc-env=CARGO_PKG_PROFILE={}", env::var("PROFILE").unwrap());
     git_version::set_env();
 }
