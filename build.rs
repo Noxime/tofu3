@@ -4,6 +4,7 @@
 // type of compilation is happening. Useful if you want to for example
 // differentiate your development and prod logs on datadog.
 
+extern crate git_version;
 extern crate regex;
 use regex::{ Regex, Captures };
 
@@ -28,4 +29,5 @@ fn main() {
     drop(file2);
 
     println!("cargo:rustc-env=CARGO_PKG_PROFILE={}", env::var("PROFILE").unwrap())
+    git_version::set_env();
 }
