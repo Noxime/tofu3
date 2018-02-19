@@ -1,7 +1,7 @@
 [package]
 name = "tofubot"
 description = "loa"
-version = "3.2.1-loa+build.640"
+version = "3.2.1-loa+build.654"
 authors = ["noxim#6410"]
 build = "build.rs"
 
@@ -20,6 +20,7 @@ urbandictionary = "0.3.0"
 reqwest = "0.8.4"
 dogstatsd = "0.4.0"
 lazy_static = "1.0.0"
+sys-info = "0.5.6"
 
 [dependencies.serenity]
 version = "0.5.1"

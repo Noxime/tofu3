@@ -18,25 +18,32 @@ extern crate urbandictionary;
 extern crate dogstatsd;
 #[macro_use]
 extern crate lazy_static;
+extern crate sys_info;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
     StandardFramework, HelpBehaviour, help_commands, Args, CommandOptions, 
     CommandError,
 };
+
 use serenity::utils::Colour;
+use serenity::CACHE;
 use serenity::model::channel::Message;
 use serenity::model::user::User;
-use serenity::model::guild::Member;
+use serenity::model::guild::{Member};
 use serenity::model::event::MessageUpdateEvent;
+use serenity::model::gateway::Ready;
 use serenity::model::id::{UserId, GuildId, ChannelId, MessageId};
 use typemap::Key;
 
 use std::collections::HashMap;
+use std::thread;
+use std::time::Duration;
 
 mod mongo;
 mod modules;
 mod dog;
+mod utils;
 
 // this makes sure we don't give too much score too often. The hashmap contains
 // a user id and then the last unix timestamp they got some score. So we wait 2
@@ -46,9 +53,58 @@ impl Key for RankLock {
     type Value = HashMap<UserId, u64>;
 }
 
+#[derive(Debug, Clone)]
+struct StatsStore {
+    pub users: usize,
+    pub guilds: usize,
+    pub messages: usize,
+    pub start_utc: time::Tm,
+}
+impl StatsStore {
+    fn new() -> Self {
+        Self {
+            users: 0,
+            guilds: 0,
+            messages: 0,
+            start_utc: time::now_utc(),
+        }
+    }
+}
+
+struct StatsLock;
+impl Key for StatsLock {
+    type Value = StatsStore;
+}
+
 struct DiscordHandler;
 
 impl EventHandler for DiscordHandler {
+
+    // connected to discord event
+    fn ready(&self, ctx: Context, ready: Ready) {
+        // cool inforooni
+        info!("Connected to api v{} with {} guilds", 
+            ready.version, ready.guilds.len());
+
+        // stats
+        thread::spawn(move || {
+            loop {
+                {
+                    let cache = CACHE.read();
+                    let mut data = ctx.data.lock();
+                    let stats = data.get_mut::<StatsLock>()
+                        .expect("No stats?");
+                    stats.users = cache.users.len();
+                    stats.guilds = cache.guilds.len();
+                    /*
+                    dog::set("stats.guilds.cache", cache.users.len(), vec![]);
+                    */
+                }
+                
+                thread::sleep(Duration::new(5, 0));
+            }
+        });
+    }
 
     // logging
     fn guild_ban_addition(&self, ctx: Context, id: GuildId, user: User) {
@@ -71,7 +127,9 @@ impl EventHandler for DiscordHandler {
         modules::logging::message_edit(&ctx, &msg);
     }
 
+    // TODO: Refactor this to its respective modules
     fn message(&self, ctx: Context, msg: Message) {
+
         // fancy graphs on datadog
         if msg.is_own() {
             dog::incr("messages.sent", vec![]);
@@ -92,6 +150,12 @@ impl EventHandler for DiscordHandler {
             return;
         }
 
+        // we like stats so log that son of a bitch
+        {
+            let mut data = ctx.data.lock();
+            let stats = data.get_mut::<StatsLock>().expect("No stats?");
+            stats.messages += 1;
+        }
 
         // for our ranks, we need to add the score from this message to the db
         let incr = { // first check if even should give user score (2min passed)
@@ -99,6 +163,7 @@ impl EventHandler for DiscordHandler {
             let lock = data.get_mut::<RankLock>().unwrap();
             let last = lock.entry(msg.author.id).or_insert(0);
             let now = time::now().to_timespec().sec;
+
             // check 2 minutes passed
             if *last + 120 < now as u64 {
                 *last = now as u64;
@@ -187,6 +252,7 @@ fn main() {
         let mut data = client.data.lock();
         data.insert::<mongo::Mongo>(mongo::connect());
         data.insert::<RankLock>(HashMap::new());
+        data.insert::<StatsLock>(StatsStore::new());
     }
 
     // configure our discord framework
@@ -218,11 +284,6 @@ fn main() {
         )
         // misc
         .group("Miscellaneous", |c| c
-            .command("stats", |c| c
-                .cmd(modules::stats::stats)
-                .desc("System information about TofuBot")
-                .before(before)
-                .after(after))
             .command("urban", |c| c
                 .cmd(modules::urban::urban)
                 .desc("Search urban dictionary for a word or a sentence.")
@@ -231,6 +292,12 @@ fn main() {
                 .known_as("ub")
                 .known_as("urbandictionary")
                 .min_args(1)
+                .before(before)
+                .after(after)))
+        .group("Info", |c| c
+            .command("botinfo", |c| c
+                .cmd(modules::stats::botinfo)
+                .desc("Information about TofuBot")
                 .before(before)
                 .after(after)))
         // ranks
