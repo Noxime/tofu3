@@ -8,7 +8,7 @@ build = "build.rs"
 [dependencies]
 kankyo = "0.2.0"
 log = "0.4.0"
-pretty_env_logger = { path = "../datadog-env-logger" }
+pretty_env_logger = { git = "https://github.com/Noxime/datadog-env-logger.git" }
 serde = "1.0.21"
 serde_derive = "1.0.21"
 bson = "0.10.0"
