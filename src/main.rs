@@ -215,37 +215,51 @@ _: &CommandOptions) -> bool {
 }
 
 // run before any command
-fn before(_: &mut Context, _: &Message) -> bool {
-    dog::incr("commands.calls", vec![]);
+fn before(_: &mut Context, _: &Message, cmd: &str) -> bool {
+    dog::incr("commands.calls", vec![format!("command:cmd")]);
     true
 }
 
 // after any command, to report internal errors
-fn after(_: &mut Context, _: &Message, ret: &Result<(), CommandError>) {
+fn after(_: &mut Context, _: &Message,cmd: &str, ret: Result<(), CommandError>){
     if ret.is_err() {
-        dog::incr("commands.errors", vec![]);
+        dog::incr("commands.errors", vec![format!("command:cmd")]);
         error!("Error in command: {:?}", ret);
     } else {
-        dog::incr("commands.executes", vec![]);
+        dog::incr("commands.executes", vec![format!("command:cmd")]);
     }
 }
 
 fn main() {
+    println!("Starting (0)");
     // load environment variables
     if let Err(why) = kankyo::load() {
         error!("Could not load .env file: {:#?}", why);
     }
     // initialize a pretty logger
     pretty_env_logger::init();
+    println!("Starting (1)");
 
     // note unwrap is safe here, because these are always set by cargo for us
     info!("Starting {} v{}", 
-        kankyo::key("CARGO_PKG_NAME").unwrap(), 
-        kankyo::key("CARGO_PKG_VERSION").unwrap());
+        env!("CARGO_PKG_NAME"), 
+        env!("CARGO_PKG_VERSION"));
+    
+    println!("Starting (1.5)");
 
     // connect to the discord endpoint
     let token = kankyo::key("TOFU_DISCORD").expect("TOFU_DISCORD missing!");
-    let mut client = DiscordClient::new(&token, DiscordHandler).unwrap();
+    println!("Starting (1.75)");
+    let mut client = match DiscordClient::new(&token, DiscordHandler) {
+        Ok(v) => v,
+        Err(why) => {
+            error!("Could not create discord client: {}", why);
+            error!("Indepth: {:#?}", why);
+            panic!("main.rs:253 = failed creation");
+        }
+    };
+
+    println!("Starting (2)");
 
     // set up client data
     {
@@ -255,6 +269,8 @@ fn main() {
         data.insert::<StatsLock>(StatsStore::new());
     }
 
+    println!("Starting (3)");
+    
     // configure our discord framework
     client.with_framework(StandardFramework::new()
         .configure(|c| c
@@ -282,6 +298,8 @@ fn main() {
             .embed_success_colour(Colour::fooyoo())
             .embed_error_colour(Colour::red())
         )
+        .before(before)
+        .after(after)
         // misc
         .group("Miscellaneous", |c| c
             .command("urban", |c| c
@@ -292,14 +310,12 @@ fn main() {
                 .known_as("ub")
                 .known_as("urbandictionary")
                 .min_args(1)
-                .before(before)
-                .after(after)))
+                ))
         .group("Info", |c| c
             .command("botinfo", |c| c
                 .cmd(modules::stats::botinfo)
                 .desc("Information about TofuBot")
-                .before(before)
-                .after(after)))
+                ))
         // ranks
         .group("Ranking", |c| c
             .command("rank", |c| c
@@ -311,8 +327,7 @@ fn main() {
                 .usage("[mention or snowflake]")
                 .example("@noxim#6410")
                 .max_args(1)
-                .before(before)
-                .after(after))
+                )
             .command("leaderboard", |c| c
                 .cmd(modules::ranks::leaderboard)
                 .bucket("ranking")
@@ -321,8 +336,7 @@ fn main() {
                 levels are calculated with `√x ÷ 3`, where x is your XP. 5 XP \
                 is given for every 2 minutes of active chatting.")
                 .max_args(0)
-                .before(before)
-                .after(after)))
+                ))
         .group("Admin", |c| c
             .command("settings", |c| c
                 .cmd(modules::settings::settings)
@@ -336,8 +350,7 @@ fn main() {
                 TofuBot webpage for extra help.")
                 .usage("[file]")
                 .max_args(1)
-                .before(before)
-                .after(after)))
+                ))
         .group("Commands", |c| c
             .command("new", |c| c
                 .cmd(modules::commands::new)
@@ -349,8 +362,7 @@ fn main() {
                 .desc("Create a new custom command for this guild. Make sure \
                 you remember to include the prefix you want to use for that \
                 command, for example `*` or `!`.")
-                .before(before)
-                .after(after))
+                )
             .command("delete", |c| c
                 .cmd(modules::commands::delete)
                 .check(admin_check)
@@ -360,8 +372,7 @@ fn main() {
                 .usage("<name>")
                 .desc("Remove a previousley created custom command. Make sure \
                 you write the command name correctly.")
-                .before(before)
-                .after(after))
+                )
             .command("list", |c| c
                 .cmd(modules::commands::list)
                 .bucket("commands")
@@ -371,9 +382,10 @@ fn main() {
                 .desc("Use this command to see all the custom commands for \
                 this server. In case all the commands don't fit on the same \
                 page, you can provide a page number.")
-                .before(before)
-                .after(after)))
+                ))
     );
+
+    println!("Starting (4)");
 
     if let Err(why) = client.start() {
         eprintln!("Could not start serenity: {:?}", why);

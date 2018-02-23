@@ -47,9 +47,10 @@ command!(botinfo(ctx, msg) {
             Build: **{}**\n\
             Uptime: **{}**\n\
             Git: **{}**",
-            env::var("CARGO_PKG_VERSION").expect("Cargo what?"),
+            env!("CARGO_PKG_VERSION"),
             utils::fmt_difference(time::now_utc() - stats.start_utc),
             env!("VERSION")), true)
+            /*
         .field("System", format!("\
             OS: **{}**\n\
             Uptime: **{}**\n\
@@ -65,8 +66,9 @@ command!(botinfo(ctx, msg) {
             Users: **{}**\n\
             Msg count: **{}**",
             stats.guilds, stats.users, stats.messages), true)
+            */
     )) {
-        Err(why) => error!("MSG failed: {}", why),
+        Err(why) => error!("MSG failed: {:#?}", why),
         _ => {},
     }
 });
