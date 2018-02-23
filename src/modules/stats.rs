@@ -34,6 +34,7 @@ command!(botinfo(ctx, msg) {
         .description("TofuBot is a general purpose _feature creep_ discord bot \
         with wide range of functions and tools for keeping your server \
         exciting!")
+        /*
         .field("Owner", format!("
             Name: **{}#{}**\n\
             Snow: **{}**",
@@ -50,7 +51,7 @@ command!(botinfo(ctx, msg) {
             env!("CARGO_PKG_VERSION"),
             utils::fmt_difference(time::now_utc() - stats.start_utc),
             env!("VERSION")), true)
-            /*
+            
         .field("System", format!("\
             OS: **{}**\n\
             Uptime: **{}**\n\
