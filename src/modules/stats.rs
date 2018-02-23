@@ -13,6 +13,7 @@ use std::env;
 // show information about tofubot itself
 command!(botinfo(ctx, msg) {
     let app = http::get_current_application_info().expect("No bot info");
+    let app_id = app.id.clone();
 
     // Here are some constants like links
     let icon = "https://i.imgur.com/haeQiIJ.png".to_string();
@@ -30,11 +31,12 @@ command!(botinfo(ctx, msg) {
     match msg.channel_id.send_message(|m| m.embed(|e| e
         .title("Information about TofuBot")
         .color(Colour::fooyoo())
-        .thumbnail(&app.icon.unwrap_or(icon))
+        .thumbnail(&app.icon.map(|v| 
+            format!("https://cdn.discordapp.com/app-icons/{}/{}.png", app_id,v))
+            .unwrap_or(icon))
         .description("TofuBot is a general purpose _feature creep_ discord bot \
         with wide range of functions and tools for keeping your server \
         exciting!")
-        /*
         .field("Owner", format!("
             Name: **{}#{}**\n\
             Snow: **{}**",
@@ -51,7 +53,6 @@ command!(botinfo(ctx, msg) {
             env!("CARGO_PKG_VERSION"),
             utils::fmt_difference(time::now_utc() - stats.start_utc),
             env!("VERSION")), true)
-            
         .field("System", format!("\
             OS: **{}**\n\
             Uptime: **{}**\n\
@@ -67,9 +68,10 @@ command!(botinfo(ctx, msg) {
             Users: **{}**\n\
             Msg count: **{}**",
             stats.guilds, stats.users, stats.messages), true)
-            */
+            
     )) {
         Err(why) => error!("MSG failed: {:#?}", why),
         _ => {},
     }
+    
 });
