@@ -272,7 +272,7 @@ fn main() {
         data.insert::<StatsLock>(StatsStore::new());
         data.insert::<PerspectiveLock>(PerspectiveClient::new(
             kankyo::key("TOFU_PERSPECTIVE_KEY")
-                .expect("No perspective key").as_str()));
+                .expect("No perspective key").as_str(), true));
     }
     
     // configure our discord framework
