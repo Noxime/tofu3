@@ -1,14 +1,11 @@
 use StatsLock;
 use utils;
 
-use serenity::CACHE;
 use serenity::model::permissions::Permissions;
 use serenity::utils::{Colour, with_cache};
 use serenity::http;
 use time;
 use sys_info;
-
-use std::env;
 
 // show information about tofubot itself
 command!(botinfo(ctx, msg) {

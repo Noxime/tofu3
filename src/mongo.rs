@@ -11,7 +11,7 @@ use std::convert::From;
 use std::collections::HashMap;
 
 use dog;
-use modules::analyze::{Analysis, analyze};
+use modules::analyze::Analysis;
 
 // This stores our mongo database in our framework
 pub struct Mongo;
