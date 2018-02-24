@@ -1,7 +1,6 @@
 use serenity::model::channel::Message;
 use serenity::client::Context;
 use perspective::model::*;
-use perspective::PerspectiveClient;
 
 use PerspectiveLock;
 

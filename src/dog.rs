@@ -31,3 +31,8 @@ pub fn set(name: &str, val: i64, tags: Vec<String>) {
 pub fn time<F: FnOnce()>(name: &str, tags: Vec<String>, block: F) {
     DOG.time(name, tags, block).unwrap();
 }
+
+#[allow(dead_code)]
+pub fn timing(name: &str, val: i64, tags: Vec<String>) {
+    DOG.timing(name, val, [&vec()[..], &tags[..]].concat()).unwrap();
+}

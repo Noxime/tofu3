@@ -59,6 +59,11 @@ impl Key for PerspectiveLock {
     type Value = perspective::PerspectiveClient;
 }
 
+struct CommandTimers;
+impl Key for CommandTimers { // value here is call time in millisec epoch
+    type Value = HashMap<MessageId, usize>;
+}
+
 #[derive(Debug, Clone)]
 struct StatsStore {
     pub users: usize,
@@ -224,19 +229,50 @@ _: &CommandOptions) -> bool {
 }
 
 // run before any command
-fn before(_: &mut Context, _: &Message, cmd: &str) -> bool {
-    dog::incr("commands.calls", vec![format!("command:cmd")]);
+fn before(ctx: &mut Context, msg: &Message, cmd: &str) -> bool {
+    dog::incr("commands.calls", vec![format!("command:{}", cmd)]);
+
+    {
+        let mut data = ctx.data.lock();
+        let timers = data.get_mut::<CommandTimers>().unwrap();
+        let t = time::now_utc().to_timespec();
+        timers.insert(msg.id, t.sec as usize * 1000usize 
+            + t.nsec as usize / 1_000_000usize);
+    }
+
     true
 }
 
 // after any command, to report internal errors
-fn after(_: &mut Context, _: &Message,cmd: &str, ret: Result<(), CommandError>){
+fn after(ctx: &mut Context, msg: &Message, 
+    cmd: &str, ret: Result<(), CommandError>) {
+
     if ret.is_err() {
-        dog::incr("commands.errors", vec![format!("command:cmd")]);
+        dog::incr("commands.errors", vec![format!("command:{}", cmd)]);
         error!("Error in command: {:?}", ret);
     } else {
-        dog::incr("commands.executes", vec![format!("command:cmd")]);
+        dog::incr("commands.executes", vec![format!("command:{}", cmd)]);
     }
+
+    let old = {
+        let mut data = ctx.data.lock();
+        let timers = data.get_mut::<CommandTimers>().unwrap();
+        timers.remove(&msg.id)
+    };
+    match old {
+        Some(v) => {
+            let t = time::now_utc().to_timespec();
+            let t = t.sec as usize * 1000usize 
+                + t.nsec as usize / 1_000_000usize;
+            dog::timing("commands.timing", (t - v) as i64, 
+                vec![format!("command:{}", cmd)]);
+            debug!("Timing for {}: {}", cmd, t - v);
+        },
+        None => {
+            warn!("No command timing found for {} ({})", cmd, msg.id);
+        }
+    }
+    
 }
 
 fn main() {
@@ -273,6 +309,7 @@ fn main() {
         data.insert::<PerspectiveLock>(PerspectiveClient::new(
             kankyo::key("TOFU_PERSPECTIVE_KEY")
                 .expect("No perspective key").as_str(), true));
+        data.insert::<CommandTimers>(HashMap::new());
     }
     
     // configure our discord framework

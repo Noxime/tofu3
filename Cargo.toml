@@ -1,7 +1,7 @@
 [package]
 name = "tofubot"
 description = "do-it-again"
-version = "3.3.1-again+build.987"
+version = "3.3.1-again+build.1001"
 authors = ["noxim#6410"]
 build = "build.rs"
 
