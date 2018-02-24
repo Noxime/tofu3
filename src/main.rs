@@ -19,6 +19,7 @@ extern crate dogstatsd;
 #[macro_use]
 extern crate lazy_static;
 extern crate sys_info;
+extern crate perspective;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
@@ -35,6 +36,7 @@ use serenity::model::event::MessageUpdateEvent;
 use serenity::model::gateway::Ready;
 use serenity::model::id::{UserId, GuildId, ChannelId, MessageId};
 use typemap::Key;
+use perspective::PerspectiveClient;
 
 use std::collections::HashMap;
 use std::thread;
@@ -51,6 +53,10 @@ mod utils;
 struct RankLock;
 impl Key for RankLock {
     type Value = HashMap<UserId, u64>;
+}
+struct PerspectiveLock;
+impl Key for PerspectiveLock {
+    type Value = perspective::PerspectiveClient;
 }
 
 #[derive(Debug, Clone)]
@@ -137,12 +143,15 @@ impl EventHandler for DiscordHandler {
             dog::incr("messages.received", vec![]);
         }
 
+        let analysis = modules::analyze::analyze(&ctx, &msg);
+
         // save the message in mongo
         {
             let data = ctx.data.lock();
             let db = data.get::<mongo::Mongo>().expect("No DB?");
             // wait wtf
-            mongo::set_message(db, &mongo::MongoMessage::from(msg.clone()));
+            mongo::set_message(db, 
+                &mongo::MongoMessage::from((msg.clone(), Some(analysis))));
         }
 
         // don't activate for bots
@@ -231,25 +240,21 @@ fn after(_: &mut Context, _: &Message,cmd: &str, ret: Result<(), CommandError>){
 }
 
 fn main() {
-    println!("Starting (0)");
     // load environment variables
     if let Err(why) = kankyo::load() {
         error!("Could not load .env file: {:#?}", why);
     }
     // initialize a pretty logger
     pretty_env_logger::init();
-    println!("Starting (1)");
 
     // note unwrap is safe here, because these are always set by cargo for us
     info!("Starting {} v{}", 
         env!("CARGO_PKG_NAME"), 
         env!("CARGO_PKG_VERSION"));
-    
-    println!("Starting (1.5)");
 
     // connect to the discord endpoint
     let token = kankyo::key("TOFU_DISCORD").expect("TOFU_DISCORD missing!");
-    println!("Starting (1.75)");
+
     let mut client = match DiscordClient::new(&token, DiscordHandler) {
         Ok(v) => v,
         Err(why) => {
@@ -259,17 +264,16 @@ fn main() {
         }
     };
 
-    println!("Starting (2)");
-
     // set up client data
     {
         let mut data = client.data.lock();
         data.insert::<mongo::Mongo>(mongo::connect());
         data.insert::<RankLock>(HashMap::new());
         data.insert::<StatsLock>(StatsStore::new());
+        data.insert::<PerspectiveLock>(PerspectiveClient::new(
+            kankyo::key("TOFU_PERSPECTIVE_KEY")
+                .expect("No perspective key").as_str()));
     }
-
-    println!("Starting (3)");
     
     // configure our discord framework
     client.with_framework(StandardFramework::new()
@@ -384,8 +388,6 @@ fn main() {
                 page, you can provide a page number.")
                 ))
     );
-
-    println!("Starting (4)");
 
     if let Err(why) = client.start() {
         eprintln!("Could not start serenity: {:?}", why);

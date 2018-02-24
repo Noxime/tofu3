@@ -5,3 +5,4 @@ pub mod settings;
 pub mod urban;
 pub mod commands;
 pub mod logging;
+pub mod analyze;

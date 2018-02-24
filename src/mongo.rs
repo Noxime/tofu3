@@ -11,6 +11,7 @@ use std::convert::From;
 use std::collections::HashMap;
 
 use dog;
+use modules::analyze::{Analysis, analyze};
 
 // This stores our mongo database in our framework
 pub struct Mongo;
@@ -96,14 +97,17 @@ pub struct MongoMessage {
     pub channel_id: i64,
     pub user_id: i64,
     pub content: String,
+    pub analysis: Option<Analysis>
 }
-impl From<Message> for MongoMessage {
-    fn from(msg: Message) -> Self {
+impl From<(Message, Option<Analysis>)> for MongoMessage {
+    fn from(msg_scan: (Message, Option<Analysis>)) -> Self {
+        let (msg, scan) = msg_scan;
         Self {
             message_id: msg.id.0 as i64,
             channel_id: msg.channel_id.0 as i64,
             user_id: msg.author.id.0 as i64,
             content: msg.content,
+            analysis: scan,
         }
     }
 }
