@@ -1,7 +1,7 @@
 [package]
 name = "tofubot"
 description = "going-crazy"
-version = "3.4.0-crazy+build.1039"
+version = "3.4.1-crazy+build.1039"
 authors = ["noxim#6410"]
 build = "build.rs"
 
