@@ -322,10 +322,34 @@ pub fn get_top_users(db: &Database, id: GuildId, limit: i64) -> Vec<UserConfig> 
         for item in cursor {
             let doc = item.unwrap();
 
-            let parsed = bson::from_bson(Bson::Document(doc)).expect(
-                &format!("Failed to deserialize user"));
+            let parsed = bson::from_bson(Bson::Document(doc))
+                .expect("Failed to deserialize user");
 
             results.push(parsed);
+        }
+    });
+
+    results
+}
+
+// fetch all messages for a single user
+pub fn get_messages(db: &Database, id: UserId) -> Vec<MongoMessage> {
+    let mut results: Vec<MongoMessage> = vec![];
+
+    dog::incr("db.messages.count", vec![]);
+    dog::time("db.messages", vec![format!("user:{}", id)], || {
+        let collection = db.collection("messages");
+        let cursor = collection.find(Some(doc! {
+            "user_id" => id.0 as i64
+        }), None).unwrap();
+
+        for item in cursor {
+            let doc = item.unwrap();
+
+            let parsed = bson::from_bson(Bson::Document(doc))
+                .expect("Failed to deserialize message");
+
+            results.push(parsed)
         }
     });
 

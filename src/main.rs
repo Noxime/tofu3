@@ -263,7 +263,7 @@ fn after(ctx: &mut Context, msg: &Message,
         Some(v) => {
             let t = time::now_utc().to_timespec();
             let t = t.sec as usize * 1000usize 
-                + t.nsec as usize / 1_000_000usize;
+                 + t.nsec as usize / 1_000_000usize;
             dog::timing("commands.timing", (t - v) as i64, 
                 vec![format!("command:{}", cmd)]);
             debug!("Timing for {}: {}", cmd, t - v);
@@ -351,6 +351,12 @@ fn main() {
                 .known_as("ub")
                 .known_as("urbandictionary")
                 .min_args(1)
+                )
+            .command("analyze", |c| c
+                .cmd(modules::analyze::analyze_cmd)
+                .desc("Analyze a user or a message and show various statistics \
+                    and numbers for them/it.")
+                .usage("[user|message]")
                 ))
         .group("Info", |c| c
             .command("botinfo", |c| c
