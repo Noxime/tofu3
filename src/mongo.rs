@@ -90,7 +90,7 @@ impl UserConfig {
 // instead of hitting discord api constantly we can just look at our own shit
 // and wow this is a long sentance but who cares really its just me reading the
 // source
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Default)]
 pub struct MongoMessage {
     #[serde(rename = "_id")]
     pub message_id: i64,
