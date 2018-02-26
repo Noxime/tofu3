@@ -26,12 +26,12 @@ command!(rank(ctx, msg, args) {
 
     let user = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().unwrap();
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*rank no mongo");
         mongo::get_user(db, id)
     };
 
     let (level, progress) = calculate_level(user.get_score(
-        msg.guild_id().unwrap()));
+        unopt_cmd!(msg.guild_id(), "*rank no gid")));
 
     let _ = msg.channel_id.send_message(|m| m.embed(|e| e
         .color(Colour::fooyoo())
@@ -46,13 +46,13 @@ command!(rank(ctx, msg, args) {
 
 // find top 10 users for this server and post them in a list
 command!(leaderboard(ctx, msg) {
-    let id = msg.guild_id().unwrap();
+    let id = unopt_cmd!(msg.guild_id(), "*lb no gid");
     let _ = msg.channel_id.broadcast_typing();
 
     // load users from mongo
     let users = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().unwrap();
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*lb no mongo");
         mongo::get_top_users(db, id, 10)
     };
 

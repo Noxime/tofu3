@@ -136,8 +136,9 @@ pub fn get_message(db: &Database, id: MessageId) -> Option<MongoMessage> {
         ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
             Ok(option) => {
                 match option {
-                    Some(value) => Some(bson::from_bson(Bson::Document(value))
-                        .expect("Failed to deserialize message")),
+                    Some(value) => Some(unres!(
+                        bson::from_bson(Bson::Document(value)),
+                        "Msg deserialize failed")),
                     None => None
                 }
             },
@@ -165,7 +166,9 @@ pub fn set_message(db: &Database, msg: &MongoMessage) {
         };
 
         let collection = db.collection("messages");
-        if let Bson::Document(document) = bson::to_bson(msg).unwrap() {
+        if let Bson::Document(document) = 
+            unres!(bson::to_bson(msg), "msg serialize failed")
+        {
             match collection.find_one_and_replace(
                 doc! { "_id" => msg.message_id },
                 document,
@@ -189,8 +192,8 @@ pub fn get_config(db: &Database, id: GuildId) -> GuildConfig {
         ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
             Ok(option) => {
                 match option {
-                    Some(value) => bson::from_bson(Bson::Document(value))
-                        .expect("Failed to deserialize guild config"),
+                    Some(value) => unres!(bson::from_bson(Bson::Document(value)),
+                        "config deserialize failed"),
                     None => {
                         let config = GuildConfig::new(id.0 as i64);
                         set_config(db, &config);
@@ -223,7 +226,9 @@ pub fn set_config(db: &Database, config: &GuildConfig) {
             write_concern: None
         };
         let collection = db.collection("configs");
-        if let Bson::Document(document) = bson::to_bson(&config).unwrap() {
+        if let Bson::Document(document) = 
+            unres!(bson::to_bson(&config), "config serialization failed") 
+        {
             match collection.find_one_and_replace(
                 doc!{ "_id" => config.guild_id }, 
                 document,
@@ -246,8 +251,8 @@ pub fn get_user(db: &Database, id: UserId) -> UserConfig {
         ret = match collection.find_one(Some(doc!{ "_id": id.0 as i64 }), None){
             Ok(option) => {
                 match option {
-                    Some(value) => bson::from_bson(Bson::Document(value))
-                        .expect(format!("Failed to deserialize user config {}", 
+                    Some(value) => unres!(bson::from_bson(Bson::Document(value))
+                        , format!("Failed to deserialize user config {}", 
                             id.0 as i64).as_str()),
                     None => {
                         let user = UserConfig::new(id.0 as i64);
@@ -281,7 +286,9 @@ pub fn set_user(db: &Database, user: &UserConfig) {
             write_concern: None
         };
         let collection = db.collection("users");
-        if let Bson::Document(document) = bson::to_bson(&user).unwrap() {
+        if let Bson::Document(document) = 
+            unres!(bson::to_bson(&user), "user serialization failed")
+        {
             match collection.find_one_and_replace(
                 doc!{ "_id" => user.user_id }, 
                 document,
@@ -314,16 +321,16 @@ pub fn get_top_users(db: &Database, id: GuildId, limit: i64) -> Vec<UserConfig> 
         let collection = db.collection("users");
         debug!("scores.{}", id);
         // our results
-        let cursor = collection.find(Some(doc! {
+        let cursor = unres!(collection.find(Some(doc! {
             format!("scores.{}", id): doc! { "$exists": true }
-        }), Some(options)).unwrap();
+        }), Some(options)), "mongo top user find failed");
 
         // deserialize all our results
         for item in cursor {
-            let doc = item.unwrap();
+            let doc = unres!(item, "cursor top user next failed");
 
-            let parsed = bson::from_bson(Bson::Document(doc))
-                .expect("Failed to deserialize user");
+            let parsed = unres!(bson::from_bson(Bson::Document(doc)),
+                "Failed to deserialize user");
 
             results.push(parsed);
         }
@@ -339,15 +346,15 @@ pub fn get_messages(db: &Database, id: UserId) -> Vec<MongoMessage> {
     dog::incr("db.messages.count", vec![]);
     dog::time("db.messages", vec![format!("user:{}", id)], || {
         let collection = db.collection("messages");
-        let cursor = collection.find(Some(doc! {
+        let cursor = unres!(collection.find(Some(doc! {
             "user_id" => id.0 as i64
-        }), None).unwrap();
+        }), None), "mongo get all messages failed");
 
         for item in cursor {
-            let doc = item.unwrap();
+            let doc = unres!(item, "cursor messages next failed");
 
-            let parsed = bson::from_bson(Bson::Document(doc))
-                .expect("Failed to deserialize message");
+            let parsed = unres!(bson::from_bson(Bson::Document(doc)), 
+                "Failed to deserialize message");
 
             results.push(parsed)
         }

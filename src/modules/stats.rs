@@ -9,21 +9,25 @@ use sys_info;
 
 // show information about tofubot itself
 command!(botinfo(ctx, msg) {
-    let app = http::get_current_application_info().expect("No bot info");
+    let app = unres_cmd!(http::get_current_application_info(),"botinfo no app");
     let app_id = app.id.clone();
 
     // Here are some constants like links
     let icon = "https://i.imgur.com/haeQiIJ.png".to_string();
     let homepage = "http://noxim.xyz/tofubot";
     let trello = "https://trello.com/b/EkzYe3mO";
-    let invite = with_cache(|c| c.user.invite_url(Permissions::empty()))
-        .expect("No invite?");
+    let invite = unres_cmd!(
+        with_cache(|c| c.user.invite_url(Permissions::empty())),
+        "botinfo no invite");
 
     let stats = {
         let data = ctx.data.lock();
-        data.get::<StatsLock>().expect("No stats?").clone()
+        unopt_cmd!(data.get::<StatsLock>(), "botinfo no stats").clone()
     };
-    let load = sys_info::loadavg().expect("No load?");
+    let load = unres_cmd!(sys_info::loadavg(), "No load?");
+    let os = unres_cmd!(sys_info::os_release(), "botinfo no os");
+    let host_uptime = utils::fmt_difference(time::Duration::seconds(
+        unres_cmd!(sys_info::boottime(), "No boot time").tv_sec));
 
     match msg.channel_id.send_message(|m| m.embed(|e| e
         .title("Information about TofuBot")
@@ -55,9 +59,8 @@ command!(botinfo(ctx, msg) {
             Uptime: **{}**\n\
             Load: **{}/{}/{}**\n\
             ",
-            sys_info::os_release().expect("No OS?"),
-            utils::fmt_difference(time::Duration::seconds(
-                sys_info::boottime().expect("No boot time").tv_sec)),
+            os,
+            host_uptime,
             load.one, load.five, load.fifteen
         ), true)
         .field("Numbers", format!("

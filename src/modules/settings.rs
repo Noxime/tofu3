@@ -11,12 +11,13 @@ use std::error::Error;
 // if file attached, parse it and try to set it as the guild config
 // if no file, serialize current config and return it
 command!(settings(ctx, msg) {
+    let gid = unopt_cmd!(msg.guild_id(), "*settings no gid");
+
     match msg.attachments.iter().next() {
         Some(file) => {
             // get the file from discord CDN
             // TODO: Error reporting
-            let bytes = file.download()
-                .expect("Could not download attachment");
+            let bytes = unres_cmd!(file.download(), "*settings attach dl fail");
             // parse bytes to string
             let file = match String::from_utf8(bytes) {
                 Ok(s) => s,
@@ -51,8 +52,9 @@ command!(settings(ctx, msg) {
             // load the current config
             {
                 let data = ctx.data.lock();
-                let db = data.get::<mongo::Mongo>().unwrap();
-                let mut config = mongo::get_config(db, msg.guild_id().unwrap());
+                let db = unopt_cmd!(data.get::<mongo::Mongo>(), 
+                    "*settings no mongo");
+                let mut config = mongo::get_config(db, gid);
                 config.user = new_change;
                 mongo::set_config(db, &config);
             };
@@ -69,12 +71,14 @@ command!(settings(ctx, msg) {
             // load the current configuration
             let change = {
                 let data = ctx.data.lock();
-                let db = data.get::<mongo::Mongo>().unwrap();
-                mongo::get_config(db, msg.guild_id().unwrap()).user
+                let db = unopt_cmd!(data.get::<mongo::Mongo>(), 
+                    "*settings no mongo");
+                mongo::get_config(db, gid).user
             };
 
             // serialize and turn to both full string and to embeddable
-            let string = toml::to_string_pretty(&change).unwrap();
+            let string = unres_cmd!(toml::to_string_pretty(&change), 
+                "*settings config serialization fail");
             let mut print = string.replace("`", "\\`");
             if print.len() > 1500 {
                 print.truncate(1500);

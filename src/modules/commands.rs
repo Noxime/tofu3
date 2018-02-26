@@ -14,11 +14,12 @@ command!(new(ctx, msg, args) {
         return Err(CommandError("No content".into()));
     }
 
+    let gid = unopt_cmd!(msg.guild_id(), "*new has no gid");
     // check if db contains and if does, error out
     let mut cmds = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
-        mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*new no mongo");
+        mongo::get_config(db, gid).user.commands
             .unwrap_or(HashMap::new())
     };
 
@@ -42,8 +43,8 @@ command!(new(ctx, msg, args) {
 
     { // write back the results
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
-        let mut c = mongo::get_config(db, msg.guild_id().unwrap());
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*new no mongo");
+        let mut c = mongo::get_config(db, gid);
         c.user.commands = Some(cmds);
         mongo::set_config(db, &c);
     }
@@ -78,10 +79,12 @@ command!(delete(ctx, msg, args) {
         }
     };
 
+    let gid = unopt_cmd!(msg.guild_id(), "*delete no gid");
+
     let mut cmds = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
-        mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*delete no mongo");
+        mongo::get_config(db, gid).user.commands
             .unwrap_or(HashMap::new())
     };
 
@@ -112,8 +115,8 @@ command!(delete(ctx, msg, args) {
     // commit our changes
     {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
-        let mut config = mongo::get_config(db, msg.guild_id().unwrap());
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*delete no mongo");
+        let mut config = mongo::get_config(db, gid);
         config.user.commands = Some(cmds);
         mongo::set_config(db, &config);
     }
@@ -137,9 +140,9 @@ command!(list(ctx, msg, args) {
     let page = args.single::<u64>().unwrap_or(1);
     let cmds = { // load commands from Mongo, holding lock as little as possible
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
-        mongo::get_config(db, msg.guild_id().unwrap()).user.commands
-            .unwrap_or(HashMap::new())
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*list no mongo");
+        mongo::get_config(db, unopt_cmd!(msg.guild_id(), "*list no gid"))
+            .user.commands.unwrap_or(HashMap::new())
     };
 
     // pages

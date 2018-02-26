@@ -13,7 +13,7 @@ use serenity::CACHE;
 // our convinence method for loading the logging channel
 fn log(ctx: &Context, id: u64) -> Option<ChannelId> {
     let data = ctx.data.lock();
-    let db = data.get::<mongo::Mongo>().expect("No DB?");
+    let db = unopt!(data.get::<mongo::Mongo>(), "log helper no mongo", None);
     mongo::get_config(db, GuildId(id)).log()
 }
 
@@ -114,7 +114,7 @@ pub fn message_delete(ctx: &Context, id: &ChannelId, msg: &MessageId) {
 
     let s = if let Some(old) = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        let db = unopt!(data.get::<mongo::Mongo>(), "log del no mongo");
         mongo::get_message(db, *msg)
     } {
         // Hey we have the message in our database, show it
@@ -184,7 +184,7 @@ pub fn message_edit(ctx: &Context, msg: &MessageUpdateEvent) {
     if let Some(new) = msg.content.clone() {
         let s = if let Some(old) = {
             let data = ctx.data.lock();
-            let db = data.get::<mongo::Mongo>().expect("No DB?");
+            let db = unopt!(data.get::<mongo::Mongo>(), "log edit no mongo");
             mongo::get_message(db, msg.id)
         } {
             // Hey we have the message in our database, show it

@@ -1,7 +1,8 @@
 use dogstatsd::{Client as DogClient, Options};
 
 lazy_static! {
-    pub static ref DOG: DogClient = DogClient::new(Options::default()).unwrap();
+    pub static ref DOG: DogClient = DogClient::new(Options::default())
+        .expect("Dogstats initialization failure");
 }
 
 fn vec(tags: Vec<String>) -> Vec<String> {

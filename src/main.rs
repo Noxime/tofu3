@@ -29,7 +29,7 @@ use serenity::framework::standard::{
 
 use serenity::utils::Colour;
 use serenity::CACHE;
-use serenity::model::channel::{Message, Channel};
+use serenity::model::channel::{Message};
 use serenity::model::user::User;
 use serenity::model::guild::{Member};
 use serenity::model::event::MessageUpdateEvent;
@@ -42,10 +42,11 @@ use std::collections::HashMap;
 use std::thread;
 use std::time::Duration;
 
-mod mongo;
-mod modules;
-mod dog;
+#[macro_use]
 mod utils;
+mod mongo;
+mod dog;
+mod modules;
 
 // this makes sure we don't give too much score too often. The hashmap contains
 // a user id and then the last unix timestamp they got some score. So we wait 2
@@ -89,6 +90,7 @@ impl Key for StatsLock {
 
 struct DiscordHandler;
 
+
 impl EventHandler for DiscordHandler {
 
     // connected to discord event
@@ -103,8 +105,8 @@ impl EventHandler for DiscordHandler {
                 {
                     let cache = CACHE.read();
                     let mut data = ctx.data.lock();
-                    let stats = data.get_mut::<StatsLock>()
-                        .expect("No stats?");
+                    let stats = unopt!(data.get_mut::<StatsLock>(), 
+                        "no stats", StatsStore::new());
                     stats.users = cache.users.len();
                     stats.guilds = cache.guilds.len();
                     /*
@@ -153,7 +155,7 @@ impl EventHandler for DiscordHandler {
         // save the message in mongo
         {
             let data = ctx.data.lock();
-            let db = data.get::<mongo::Mongo>().expect("No DB?");
+            let db = unopt!(data.get::<mongo::Mongo>(), "msg no mongo");
             // wait wtf
             mongo::set_message(db, 
                 &mongo::MongoMessage::from((msg.clone(), Some(analysis))));
@@ -167,14 +169,14 @@ impl EventHandler for DiscordHandler {
         // we like stats so log that son of a bitch
         {
             let mut data = ctx.data.lock();
-            let stats = data.get_mut::<StatsLock>().expect("No stats?");
+            let stats = unopt!(data.get_mut::<StatsLock>(), "msg no stats");
             stats.messages += 1;
         }
 
         // for our ranks, we need to add the score from this message to the db
         let incr = { // first check if even should give user score (2min passed)
             let mut data = ctx.data.lock(); // we want to release this asap
-            let lock = data.get_mut::<RankLock>().unwrap();
+            let lock = unopt!(data.get_mut::<RankLock>(), "rank lock mut");
             let last = lock.entry(msg.author.id).or_insert(0);
             let now = time::now().to_timespec().sec;
 
@@ -189,17 +191,20 @@ impl EventHandler for DiscordHandler {
 
         if incr {// increase the authors rank by 5
             let data = ctx.data.lock(); // we want to release this asap
-            let db = data.get::<mongo::Mongo>().unwrap(); // mongo access
+            let db = unopt!(data.get::<mongo::Mongo>(), "incr mongo"); // db
             let mut user = mongo::get_user(db, msg.author.id);
-            let score = user.get_score(msg.guild_id().unwrap()) + 5; //incr xp 5
-            user.set_score(msg.guild_id().unwrap(), score);
+            let gid = unopt!(msg.guild_id(), "no gid");
+            let score = user.get_score(gid) + 5; //incr xp 5
+            user.set_score(gid, score);
             mongo::set_user(db, &user);
         }
 
         if let Some(cmds) = { // activate for commandeeros
             let data = ctx.data.lock();
-            let db = data.get::<mongo::Mongo>().unwrap();
-            mongo::get_config(db, msg.guild_id().unwrap()).user.commands
+            let db = unopt!(data.get::<mongo::Mongo>(), "no mongo");
+            mongo::get_config(db, 
+                unopt!(msg.guild_id(), "no gid")
+            ).user.commands
         } { // we have commands
             if let Some(v) = cmds.get(&msg.content.to_lowercase()) {
                 match msg.channel_id.send_message(|m| m.content(v)) {
@@ -215,16 +220,16 @@ impl EventHandler for DiscordHandler {
 fn admin_check(ctx: &mut Context, msg: &Message, _: &mut Args, 
 _: &CommandOptions) -> bool {
 
-    let id = msg.guild_id().unwrap();
+    let id = unopt!(msg.guild_id(), "no gid", false);
     // get admin roles
     let roles = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().unwrap();
+        let db = unopt!(data.get::<mongo::Mongo>(), "no mongo", false);
         mongo::get_config(db, id).staff()
     };
     // check if the author is the owner of this guild
     // OR check if the message author has any of the required staff roles
-    id.get().unwrap().owner_id == msg.author.id
+    unres!(id.get(), "no user?", false).owner_id == msg.author.id
     || roles.iter().any(|r| msg.author.has_role(id, *r))
 }
 
@@ -239,7 +244,7 @@ fn before(ctx: &mut Context, msg: &Message, cmd: &str) -> bool {
 
     {
         let mut data = ctx.data.lock();
-        let timers = data.get_mut::<CommandTimers>().unwrap();
+        let timers = unopt!(data.get_mut::<CommandTimers>(), "no timers",true);
         let t = time::now_utc().to_timespec();
         timers.insert(msg.id, t.sec as usize * 1000usize 
             + t.nsec as usize / 1_000_000usize);
@@ -261,7 +266,7 @@ fn after(ctx: &mut Context, msg: &Message,
 
     let old = {
         let mut data = ctx.data.lock();
-        let timers = data.get_mut::<CommandTimers>().unwrap();
+        let timers = unopt!(data.get_mut::<CommandTimers>(), "no timers");
         timers.remove(&msg.id)
     };
     match old {
@@ -316,7 +321,7 @@ fn main() {
                 .expect("No perspective key").as_str(), true));
         data.insert::<CommandTimers>(HashMap::new());
     }
-    
+
     // configure our discord framework
     client.with_framework(StandardFramework::new()
         .configure(|c| c
@@ -324,8 +329,10 @@ fn main() {
             .dynamic_prefix(|ctx, msg| {
                 // load a prefix from our mongodb
                 let data = ctx.data.lock();
-                let db = data.get::<mongo::Mongo>().unwrap();
-                let config = mongo::get_config(db, msg.guild_id().unwrap());
+                let db = unopt!(data.get::<mongo::Mongo>(), 
+                    "no mongo", None);
+                let config = mongo::get_config(db, 
+                    unopt!(msg.guild_id(), "not guild msg", None));
                 config.user.prefix
             }))
         // a nice help command for our users

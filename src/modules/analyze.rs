@@ -29,7 +29,9 @@ pub struct Analysis {
 pub fn analyze(ctx: &Context, msg: &Message) -> Analysis {
     let perspective = {
         let data = ctx.data.lock();
-        data.get::<PerspectiveLock>().unwrap().clone()
+        unopt!(
+            data.get::<PerspectiveLock>(), "no persp api", Analysis::default()
+        ).clone()
     };
 
     let analysis = match perspective.analyze(msg.content.as_str(), vec![
@@ -83,7 +85,7 @@ command!(analyze_cmd(ctx, msg, args) {
     let user = args.single::<User>().unwrap_or(msg.author.clone());
     let msgs = {
         let data = ctx.data.lock();
-        let db = data.get::<mongo::Mongo>().expect("No DB?");
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*analyze no mongo");
         mongo::get_messages(db, user.id)
     };
 
