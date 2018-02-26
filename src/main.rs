@@ -29,7 +29,7 @@ use serenity::framework::standard::{
 
 use serenity::utils::Colour;
 use serenity::CACHE;
-use serenity::model::channel::Message;
+use serenity::model::channel::{Message, Channel};
 use serenity::model::user::User;
 use serenity::model::guild::{Member};
 use serenity::model::event::MessageUpdateEvent;
@@ -230,6 +230,11 @@ _: &CommandOptions) -> bool {
 
 // run before any command
 fn before(ctx: &mut Context, msg: &Message, cmd: &str) -> bool {
+    // only activate commands for guild channels
+    if msg.is_private() {
+        return false;
+    }
+
     dog::incr("commands.calls", vec![format!("command:{}", cmd)]);
 
     {
