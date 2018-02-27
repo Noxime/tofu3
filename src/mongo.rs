@@ -9,6 +9,7 @@ use serenity::model::channel::Message;
 
 use std::convert::From;
 use std::collections::HashMap;
+use std::env;
 
 use dog;
 use modules::analyze::Analysis;
@@ -120,7 +121,9 @@ impl MongoMessage {
 // connect to a mongodb instance running on this machine and return a database
 // from it
 pub fn connect() -> Database {
-    let client = Client::connect("localhost", 27017)
+    let client = Client::connect(
+        &env::var("TOFU_MONGO_HOST").unwrap_or("localhost".to_string()), 
+        env::var("TOFU_MONGO_PORT").map(|v| v.parse::<u16>().expect("TOFU_MONGO_PORT not u16")).unwrap_or(27017))
         .expect("Failed to connect to MongoDB");
     info!("Connected to MongoDB");
     client.db("tofu3")
