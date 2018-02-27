@@ -4,7 +4,7 @@ use serenity::client::Context;
 use serenity::utils::Colour;
 use perspective::model::*;
 
-use PerspectiveLock;
+use PerspectiveKey;
 use mongo;
 
 #[derive(Serialize, Deserialize, Debug, Default)]
@@ -30,7 +30,7 @@ pub fn analyze(ctx: &Context, msg: &Message) -> Analysis {
     let perspective = {
         let data = ctx.data.lock();
         unopt!(
-            data.get::<PerspectiveLock>(), "no persp api", Analysis::default()
+            data.get::<PerspectiveKey>(), "no persp api", Analysis::default()
         ).clone()
     };
 

@@ -1,4 +1,4 @@
-use StatsLock;
+use StatsKey;
 use utils;
 
 use serenity::model::permissions::Permissions;
@@ -22,7 +22,7 @@ command!(botinfo(ctx, msg) {
 
     let stats = {
         let data = ctx.data.lock();
-        unopt_cmd!(data.get::<StatsLock>(), "botinfo no stats").clone()
+        unopt_cmd!(data.get::<StatsKey>(), "botinfo no stats").clone()
     };
     let load = unres_cmd!(sys_info::loadavg(), "No load?");
     let os = unres_cmd!(sys_info::os_release(), "botinfo no os");

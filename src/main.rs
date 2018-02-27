@@ -51,12 +51,12 @@ mod modules;
 // this makes sure we don't give too much score too often. The hashmap contains
 // a user id and then the last unix timestamp they got some score. So we wait 2
 // minutes before we can give more again
-struct RankLock;
-impl Key for RankLock {
+struct RankKey;
+impl Key for RankKey {
     type Value = HashMap<UserId, u64>;
 }
-struct PerspectiveLock;
-impl Key for PerspectiveLock {
+struct PerspectiveKey;
+impl Key for PerspectiveKey {
     type Value = perspective::PerspectiveClient;
 }
 
@@ -83,8 +83,8 @@ impl StatsStore {
     }
 }
 
-struct StatsLock;
-impl Key for StatsLock {
+struct StatsKey;
+impl Key for StatsKey {
     type Value = StatsStore;
 }
 
@@ -105,7 +105,7 @@ impl EventHandler for DiscordHandler {
                 {
                     let cache = CACHE.read();
                     let mut data = ctx.data.lock();
-                    let stats = unopt!(data.get_mut::<StatsLock>(), 
+                    let stats = unopt!(data.get_mut::<StatsKey>(), 
                         "no stats", StatsStore::new());
                     stats.users = cache.users.len();
                     stats.guilds = cache.guilds.len();
@@ -169,14 +169,14 @@ impl EventHandler for DiscordHandler {
         // we like stats so log that son of a bitch
         {
             let mut data = ctx.data.lock();
-            let stats = unopt!(data.get_mut::<StatsLock>(), "msg no stats");
+            let stats = unopt!(data.get_mut::<StatsKey>(), "msg no stats");
             stats.messages += 1;
         }
 
         // for our ranks, we need to add the score from this message to the db
         let incr = { // first check if even should give user score (2min passed)
             let mut data = ctx.data.lock(); // we want to release this asap
-            let lock = unopt!(data.get_mut::<RankLock>(), "rank lock mut");
+            let lock = unopt!(data.get_mut::<RankKey>(), "rank lock mut");
             let last = lock.entry(msg.author.id).or_insert(0);
             let now = time::now().to_timespec().sec;
 
@@ -314,9 +314,9 @@ fn main() {
     {
         let mut data = client.data.lock();
         data.insert::<mongo::Mongo>(mongo::connect());
-        data.insert::<RankLock>(HashMap::new());
-        data.insert::<StatsLock>(StatsStore::new());
-        data.insert::<PerspectiveLock>(PerspectiveClient::new(
+        data.insert::<RankKey>(HashMap::new());
+        data.insert::<StatsKey>(StatsStore::new());
+        data.insert::<PerspectiveKey>(PerspectiveClient::new(
             kankyo::key("TOFU_PERSPECTIVE_KEY")
                 .expect("No perspective key").as_str(), true));
         data.insert::<CommandTimers>(HashMap::new());
