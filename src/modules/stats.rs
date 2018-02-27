@@ -73,5 +73,4 @@ command!(botinfo(ctx, msg) {
         Err(why) => error!("MSG failed: {:#?}", why),
         _ => {},
     }
-    
 });

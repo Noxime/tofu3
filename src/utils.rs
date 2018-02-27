@@ -61,10 +61,36 @@ macro_rules! unres_cmd {
     });
 }
 
+// turn duration to a nice 0d 4h 21m 53s
 pub fn fmt_difference(diff: Duration) -> String {
     format!("{}d {}h {}m {}s", 
         diff.num_days(), 
         diff.num_hours() % 24, 
         diff.num_minutes() % 60,
         diff.num_seconds() % 60)
+}
+
+
+// this lets us deserialize values like "5128923.2" into f64 etc. Numbers from
+// strings where some json api's return wrong types
+pub mod deser_string {
+    use std::fmt::Display;
+    use std::str::FromStr;
+
+    use serde::{de, Serializer, Deserialize, Deserializer};
+
+    pub fn serialize<T, S>(value: &T, serializer: S) -> Result<S::Ok, S::Error>
+        where T: Display,
+              S: Serializer
+    {
+        serializer.collect_str(value)
+    }
+
+    pub fn deserialize<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+        where T: FromStr,
+              T::Err: Display,
+              D: Deserializer<'de>
+    {
+        String::deserialize(deserializer)?.parse().map_err(de::Error::custom)
+    }
 }

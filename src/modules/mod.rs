@@ -6,3 +6,4 @@ pub mod urban;
 pub mod commands;
 pub mod logging;
 pub mod analyze;
+pub mod weather;

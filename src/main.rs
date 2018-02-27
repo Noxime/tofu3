@@ -20,6 +20,7 @@ extern crate dogstatsd;
 extern crate lazy_static;
 extern crate sys_info;
 extern crate perspective;
+extern crate forecast;
 
 use serenity::prelude::{Client as DiscordClient, EventHandler, Context};
 use serenity::framework::standard::{
@@ -33,7 +34,7 @@ use serenity::model::channel::{Message};
 use serenity::model::user::User;
 use serenity::model::guild::{Member};
 use serenity::model::event::MessageUpdateEvent;
-use serenity::model::gateway::Ready;
+use serenity::model::gateway::{Ready, Game};
 use serenity::model::id::{UserId, GuildId, ChannelId, MessageId};
 use typemap::Key;
 use perspective::PerspectiveClient;
@@ -102,19 +103,24 @@ impl EventHandler for DiscordHandler {
         // stats
         thread::spawn(move || {
             loop {
-                {
+                let uptime = {
                     let cache = CACHE.read();
                     let mut data = ctx.data.lock();
                     let stats = unopt!(data.get_mut::<StatsKey>(), 
                         "no stats", StatsStore::new());
                     stats.users = cache.users.len();
                     stats.guilds = cache.guilds.len();
-                    /*
-                    dog::set("stats.guilds.cache", cache.users.len(), vec![]);
-                    */
-                }
+
+                    utils::fmt_difference(time::now_utc() - stats.start_utc)
+                };
+
+                ctx.shard.set_game(Some(Game::playing(&format!("\
+                    Shard: {}, uptime: {}",
+                    ctx.shard_id, uptime
+                ))));
                 
-                thread::sleep(Duration::new(5, 0));
+                // update once a minute
+                thread::sleep(Duration::new(60, 0));
             }
         });
     }
@@ -369,6 +375,12 @@ fn main() {
                 .desc("Analyze a user or a message and show various statistics \
                     and numbers for them/it.")
                 .usage("[user|message]")
+                )
+            .command("weather", |c| c
+                .cmd(modules::weather::weather)
+                .desc("Find weather information")
+                .usage("[location]")
+                .example("helsinki")
                 ))
         .group("Info", |c| c
             .command("botinfo", |c| c
