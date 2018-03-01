@@ -1,6 +1,8 @@
 # TofuBot 3
 This is a rewrite of a rewrite of a bot that never left ultra-dev phase.
 
+[![Travis branch](https://img.shields.io/travis/Noxime/tofu3/master.svg)](https://travis-ci.org/Noxime/tofu3)
+
 ## Settings
 TofuBot uses TOML for its configuratio files. Below is an example `configuration.toml` file
 ```toml
