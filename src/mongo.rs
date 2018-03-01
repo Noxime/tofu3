@@ -67,13 +67,15 @@ impl GuildConfig {
 pub struct UserConfig {
     #[serde(rename = "_id")]
     pub user_id: i64,
-    pub scores: HashMap<String, i64> // guild_id, score
+    pub scores: HashMap<String, i64>, // guild_id, score
+    pub location: Option<String>, // where user is located, used by weather
 }
 impl UserConfig {
     fn new(id: i64) -> Self {
         Self {
             user_id: id,
-            scores: HashMap::new()
+            scores: HashMap::new(),
+            location: None,
         }
     }
 

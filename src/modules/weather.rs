@@ -3,13 +3,42 @@ use forecast::{ApiClient, ForecastRequestBuilder, ApiResponse, Lang, Units};
 use serenity::utils::Colour;
 
 use utils::deser_string;
+use mongo;
 
 use std::env;
 use std::f64;
 
 // fetch the weather information for a location
-command!(weather(_ctx, msg, args) {
+command!(weather(ctx, msg, args) {
     let key = unres_cmd!(env::var("TOFU_DARK_SKY"), "no dark sky key");
+
+    let mut location = args.full().to_string();
+    if location.trim().is_empty() {
+        let user = {
+            let data = ctx.data.lock();
+            let db = unopt_cmd!(data.get::<mongo::Mongo>(), "no mongo!");
+            mongo::get_user(db, msg.author.id)
+        };
+
+        // user has location saved
+        if let Some(old) = user.location {
+            location = old;
+        } else { // wait nope they dont
+            unres_cmd!(msg.channel_id.send_message(|m| m.embed(|e| e
+                .color(Colour::red())
+                .title("Please set your location")
+                .description("TofuBot does not know where you are! Please \
+                provide the location after this command, and TofuBot will \
+                remember it next time."))), "msg failed");
+            return Ok(());
+        }
+    } else { // hey user gave us info, write that to DB
+        let data = ctx.data.lock();
+        let db = unopt_cmd!(data.get::<mongo::Mongo>(), "no mongo!");
+        let mut user = mongo::get_user(db, msg.author.id);
+        user.location = Some(location.clone());
+        mongo::set_user(db, &user);
+    }
 
     // struct for Nominatim data
     #[derive(Debug, Serialize, Deserialize)]
@@ -28,7 +57,7 @@ command!(weather(_ctx, msg, args) {
     let data: Vec<Nomi> = unres_cmd!(
         unres_cmd!(req.get(&format!("
             https://nominatim.openstreetmap.org/search/kamppi?format=jsonv2&q={}
-            ", args.full())).send(), 
+            ", location)).send(), 
         "nominatim request failed").json(), 
     "nominatim deserialize failed");
 
@@ -50,16 +79,28 @@ command!(weather(_ctx, msg, args) {
     "forecast deserialize failed");
 
 
-    let cur = unopt_cmd!(cast.currently, "no weather data");
-    debug!("{:#?}", cur);
+    // lets hope we actually have the data
+    let cur = unopt_cmd!(cast.currently, "no current data");
+    let daily = unopt_cmd!(cast.daily, "no daily data");
+    let daily = unopt_cmd!(daily.data.get(0), "no weather data").clone();
     
     // unpack our values
-    let temp = cur.temperature.unwrap_or(f64::NAN);
-    let high = cur.temperature_high.unwrap_or(f64::NAN);
-    let low = cur.temperature_low.unwrap_or(f64::NAN);
-    let wind = cur.wind_speed.unwrap_or(f64::NAN);
-    let feels = cur.apparent_temperature.unwrap_or(f64::NAN);
-    let vis = cur.visibility.unwrap_or(20f64);
+    let temp = cur.temperature.unwrap_or(
+        daily.temperature.unwrap_or(f64::NAN));
+    let high = cur.temperature_high.unwrap_or(
+        daily.temperature_high.unwrap_or(f64::NAN));
+    let low = cur.temperature_low.unwrap_or(
+        daily.temperature_low.unwrap_or(f64::NAN));
+    let wind = cur.wind_speed.unwrap_or(
+        daily.wind_speed.unwrap_or(f64::NAN));
+    let feels = cur.apparent_temperature.unwrap_or(
+        daily.apparent_temperature.unwrap_or(f64::NAN));
+    let vis = cur.visibility.unwrap_or(
+        daily.visibility.unwrap_or(20f64));
+    let humid = cur.humidity.unwrap_or(
+        daily.humidity.unwrap_or(f64::NAN));
+    let pressure = cur.pressure.unwrap_or(
+        daily.pressure.unwrap_or(f64::NAN));
 
     // generate a nice text
     // example:
@@ -94,6 +135,7 @@ command!(weather(_ctx, msg, args) {
         .title(format!("Weather in **{}**, **{}**", 
             place, country))
         .description(summary)
+        .footer(|f| f.text("Forecast by Dark Sky"))
         .field("Temperature", format!("\
             Current: **{:.2}°C**\nHigh/low: **{:.2}°C**/**{:.2}°C**",
             temp,
@@ -101,9 +143,13 @@ command!(weather(_ctx, msg, args) {
             low
             ), true)
         .field("Wind chill", format!("\
-            Feels like: **{:.2}°C**\nWind speed: **{:.2}m/s**",
+            Feels like: **{:.2}°C**\nWind speed: **{:.2} m/s**",
             feels,
             wind
             ), true)
+        .field("Atmosphere", format!("\
+            Humidity: **{:.2}%**\nPressure: **{:.2} hPa**",
+            humid * 100f64,
+            pressure), true)
     )), "msg failed");
 });
