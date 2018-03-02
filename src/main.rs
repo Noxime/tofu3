@@ -8,7 +8,7 @@ extern crate serde;
 #[macro_use]
 extern crate bson;
 extern crate kankyo;
-extern crate pretty_env_logger;
+extern crate funky_logger;
 extern crate mongodb;
 extern crate typemap;
 extern crate time;
@@ -297,7 +297,7 @@ fn main() {
         error!("Could not load .env file: {:#?}", why);
     }
     // initialize a pretty logger
-    pretty_env_logger::init();
+    funky_logger::init();
 
     // note unwrap is safe here, because these are always set by cargo for us
     info!("Starting {} v{}", 
