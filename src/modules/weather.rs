@@ -73,10 +73,19 @@ command!(weather(ctx, msg, args) {
             api.get_forecast(
             ForecastRequestBuilder::new(&key, nomi.lat, nomi.lon)
                 .lang(Lang::English)
-                .units(Units::SI)
+                .units(Units::Auto)
                 .build()),
         "forecast request failed").json(),
     "forecast deserialize failed");
+
+    let units = cast.flags.map(|v| v.units).unwrap_or(Units::SI);
+    let (utemp, uspeed, udist, upres) = match units {
+        Units::Auto     => ("",   "",      "",    ""),
+        Units::CA       => ("°C", " km/h", " km", " hPa"),
+        Units::UK       => ("°C", " mph",  " mi", " hPa"),
+        Units::Imperial => ("°F", " mph",  " mi", " psi"),
+        Units::SI       => ("°C", " m/s",  " km", " hPa"),
+    };
 
 
     // lets hope we actually have the data
@@ -107,27 +116,31 @@ command!(weather(ctx, msg, args) {
     // It is currently -15.8°C, with wind of 3.5 m/s bringing that up to a 
     // freezing -23.1°C. The sky looks clear with a visibility of about 10 km.
     let summary = format!("\
-        _It is currently **{:.1}°C**, with wind of **{:.1} m/s** \
-        bringing that {} to {}**{:.1}°C**. {} about **{:.0} km**._ ",
-        temp,
-        wind,
+        _It is currently **{:.1}{}**, with wind of **{:.1}{}** \
+        bringing that {} to {}**{:.1}{}**. {} about **{:.0}{}**._ ",
+        temp, utemp,
+        wind, uspeed,
         if feels > temp { "up" } else { "down" },
-        match feels as isize {
-            -100 ... -40 => "a frightening ",
-            -39 ... -20 => "a freezing ",
-            -19 ... -5 => "a chilly ",
-            -4 ... 11 => "a mild ",
-            18 ... 24 => "a warm ",
-            25 ... 32 => "a toasty ",
-            33 ... 37 => "a burning ",
-            38 ... 60 => "a melting hot ",
-            _ => "",
+        if units != Units::Imperial {
+             match feels as isize {
+                -100 ... -40 => "a frightening ",
+                -39 ... -20 => "a freezing ",
+                -19 ... -5 => "a chilly ",
+                -4 ... 11 => "a mild ",
+                18 ... 24 => "a warm ",
+                25 ... 32 => "a toasty ",
+                33 ... 37 => "a burning ",
+                38 ... 60 => "a melting hot ",
+                _ => "",
+            }
+        } else {
+            ""
         },
-        feels,
+        feels, utemp,
         cur.summary.map(|v| 
             format!("The sky looks {} with a visibility of", v.to_lowercase()))
             .unwrap_or("The visibility is".into()),
-        vis,
+        vis, udist
     );
 
     unres_cmd!(msg.channel_id.send_message(|m| m.embed(|e| e
@@ -137,19 +150,20 @@ command!(weather(ctx, msg, args) {
         .description(summary)
         .footer(|f| f.text("Forecast by Dark Sky"))
         .field("Temperature", format!("\
-            Current: **{:.2}°C**\nHigh/low: **{:.2}°C**/**{:.2}°C**",
-            temp,
-            high, 
-            low
+            Current: **{:.2}{}**\nHigh/low: **{:.2}{}**/**{:.2}{}**",
+            temp, utemp,
+            high, utemp,
+            low, utemp
             ), true)
         .field("Wind chill", format!("\
-            Feels like: **{:.2}°C**\nWind speed: **{:.2} m/s**",
-            feels,
-            wind
+            Feels like: **{:.2}{}**\nWind speed: **{:.2}{}**",
+            feels, utemp,
+            wind, uspeed
             ), true)
         .field("Atmosphere", format!("\
-            Humidity: **{:.2}%**\nPressure: **{:.2} hPa**",
+            Humidity: **{:.2}%**\nPressure: **{:.2}{}**",
             humid * 100f64,
-            pressure), true)
+            pressure, upres
+            ), true)
     )), "msg failed");
 });

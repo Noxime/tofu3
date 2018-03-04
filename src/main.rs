@@ -381,6 +381,7 @@ fn main() {
                 .desc("Find weather information")
                 .usage("[location]")
                 .example("helsinki")
+                .known_as("w")
                 ))
         .group("Info", |c| c
             .command("botinfo", |c| c
