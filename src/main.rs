@@ -448,9 +448,8 @@ fn main() {
             .command("list", |c| c
                 .cmd(modules::commands::list)
                 .bucket("commands")
-                .max_args(1)
                 .example("2")
-                .usage("<page>")
+                .usage("[page] [filter]")
                 .desc("Use this command to see all the custom commands for \
                 this server. In case all the commands don't fit on the same \
                 page, you can provide a page number.")

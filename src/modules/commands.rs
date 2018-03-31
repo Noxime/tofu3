@@ -54,7 +54,7 @@ command!(new(ctx, msg, args) {
         .color(Colour::fooyoo())
         .title("Command added")
         .description(
-            format!("The command **\"{}\"** has been successfuly added.", 
+            format!("The command **\"{}\"** has been successfully added.", 
             name)))) {
         Ok(_) => {},
         Err(why) => error!("MSG failed: {}", why)
@@ -137,7 +137,11 @@ command!(delete(ctx, msg, args) {
 command!(list(ctx, msg, args) {
     let _ = msg.channel_id.broadcast_typing();
     // page, but its 1 indexed
-    let page = args.single::<u64>().unwrap_or(1);
+    let page = args.single_n::<u64>()
+        .map(|_| args.single::<u64>().expect("Strange magic in air"))
+        .unwrap_or(1);
+
+    let search = args.full().trim();
     let cmds = { // load commands from Mongo, holding lock as little as possible
         let data = ctx.data.lock();
         let db = unopt_cmd!(data.get::<mongo::Mongo>(), "*list no mongo");
@@ -150,15 +154,21 @@ command!(list(ctx, msg, args) {
     results.push("".into()); // element 0
 
     // we need to transform these keys to max 2000 character "pages"
-    let mut iter = cmds.keys();
+    let mut iter = cmds.keys()
+        .filter(|k| k.to_lowercase().contains(search.to_lowercase().as_str()));
     let mut i = 0;
+    let mut j = 0;
     while let Some(key) = iter.next() {
-        if results[i].len() + key.len() >= 2000 { // this page full, move to new
+        if results[i].len() + key.len() >= 1996 { // this page full, move to new
             results.push("".to_string());
             i += 1;
         }
-
-        results[i].push_str(format!("{}\n", key).as_str());
+        
+        results[i].push_str(format!("{:<16.16}", key).as_str());
+        j += 1;
+        if j % 3 == 0 {
+            results[i].push('\n');
+        }
     }
 
     let pages = results.len();
@@ -167,7 +177,11 @@ command!(list(ctx, msg, args) {
     match msg.channel_id.send_message(|m| m.embed(|e| e
         .color(Colour::fooyoo())
         .title(format!("All commands (page {}/{})", page, pages))
-        .description(results[page - 1].clone()))) {
+        .description(format!("```{}```", results[page - 1].clone()))
+        .footer(|f| f.text(format!(
+            "Page {}/{}. Do list {} {} to view next page", 
+            page, pages, page + 1, search)))
+        )) {
         Err(why) => error!("MSG failed: {}", why),
         _ => {}
     }
